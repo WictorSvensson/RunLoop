@@ -1,0 +1,119 @@
+// Prisma schema for Runloop.
+// Milestone 1 slice: User + DailyCheckin. More models (activities, symptoms,
+// coach_*, etc.) will be added incrementally as features land.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dailyCheckins    DailyCheckin[]
+  stravaConnection StravaConnection?
+  activities       Activity[]
+}
+
+// Stores a user's Strava OAuth tokens. One connection per user.
+// Access tokens are short-lived (~6h); the refresh token is used to mint new
+// ones and CAN change on each refresh, so we always persist the latest values.
+model StravaConnection {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  athleteId      BigInt // Strava athlete id
+  accessToken    String
+  refreshToken   String
+  expiresAt      DateTime // when the access token expires
+  scope          String? // space/comma-delimited scopes granted
+  lastSyncedAt   DateTime? // last successful activity import
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// A training activity imported from Strava. Only the objective fields Strava
+// provides are mapped here; subjective fields (RPE, shoes, symptoms) stay manual.
+model Activity {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stravaId           BigInt // Strava activity id (unique per athlete)
+  name               String?
+  type               String? // Strava sport_type, e.g. "Run", "TrailRun"
+  startDate          DateTime // activity start (UTC)
+  distance           Float? // meters
+  movingTime         Int? // seconds
+  elapsedTime        Int? // seconds
+  averageSpeed       Float? // meters/second
+  maxSpeed           Float? // meters/second
+  averageHeartrate   Float? // bpm
+  maxHeartrate       Float? // bpm
+  totalElevationGain Float? // meters
+
+  // Detailed fields, filled on-demand from GET /activities/{id} when a user
+  // opens an activity. detailFetchedAt marks whether detail has been loaded.
+  startDateLocal       DateTime? // activity start in the athlete's local time
+  timezone             String?
+  averageCadence       Float?
+  averageWatts         Float?
+  weightedAverageWatts Int?
+  maxWatts             Int?
+  kilojoules           Float?
+  calories             Float?
+  averageTemp          Int? // celsius
+  description          String?
+  gearId               String?
+  gearName             String? // e.g. shoe name
+  deviceName           String?
+  detailFetchedAt      DateTime?
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Same Strava activity is never imported twice for a user.
+  @@unique([userId, stravaId])
+  @@index([userId])
+  @@index([userId, startDate])
+}
+
+model DailyCheckin {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime     @db.Date
+  weight        Float?
+  sleepDuration Int? // minutes
+  sleepQuality  SleepQuality?
+  energy        Int? // 1-5
+  soreness      Severity?
+  symptoms      Severity?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // One check-in per user per day.
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+enum SleepQuality {
+  POOR
+  OKAY
+  GOOD
+  EXCELLENT
+}
+
+enum Severity {
+  NONE
+  MILD
+  MODERATE
+  HIGH
+}

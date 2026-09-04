@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "Activity" ADD COLUMN     "averageCadence" DOUBLE PRECISION,
+ADD COLUMN     "averageTemp" INTEGER,
+ADD COLUMN     "averageWatts" DOUBLE PRECISION,
+ADD COLUMN     "calories" DOUBLE PRECISION,
+ADD COLUMN     "description" TEXT,
+ADD COLUMN     "detailFetchedAt" TIMESTAMP(3),
+ADD COLUMN     "deviceName" TEXT,
+ADD COLUMN     "gearId" TEXT,
+ADD COLUMN     "gearName" TEXT,
+ADD COLUMN     "kilojoules" DOUBLE PRECISION,
+ADD COLUMN     "maxWatts" INTEGER,
+ADD COLUMN     "startDateLocal" TIMESTAMP(3),
+ADD COLUMN     "timezone" TEXT,
+ADD COLUMN     "weightedAverageWatts" INTEGER;

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: runloop-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: runloop
+      POSTGRES_PASSWORD: runloop
+      POSTGRES_DB: runloop
+    ports:
+      - "5432:5432"
+    volumes:
+      - runloop-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runloop -d runloop"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  runloop-pgdata:
