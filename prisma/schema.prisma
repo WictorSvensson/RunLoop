@@ -57,6 +57,24 @@ model Activity {
   averageHeartrate   Float? // bpm
   maxHeartrate       Float? // bpm
   totalElevationGain Float? // meters
+
+  // Detailed fields, filled on-demand from GET /activities/{id} when a user
+  // opens an activity. detailFetchedAt marks whether detail has been loaded.
+  startDateLocal       DateTime? // activity start in the athlete's local time
+  timezone             String?
+  averageCadence       Float?
+  averageWatts         Float?
+  weightedAverageWatts Int?
+  maxWatts             Int?
+  kilojoules           Float?
+  calories             Float?
+  averageTemp          Int? // celsius
+  description          String?
+  gearId               String?
+  gearName             String? // e.g. shoe name
+  deviceName           String?
+  detailFetchedAt      DateTime?
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

@@ -32,6 +32,24 @@ export interface StravaSummaryActivity {
   total_elevation_gain?: number; // meters
 }
 
+// The detailed representation from GET /activities/{id}. Extends the summary
+// with richer fields. All optional since Strava omits fields that don't apply.
+export interface StravaDetailedActivity extends StravaSummaryActivity {
+  start_date_local?: string; // ISO 8601, athlete local time
+  timezone?: string;
+  average_cadence?: number;
+  average_watts?: number;
+  weighted_average_watts?: number;
+  max_watts?: number;
+  kilojoules?: number;
+  calories?: number;
+  average_temp?: number; // celsius
+  description?: string;
+  device_name?: string;
+  gear_id?: string;
+  gear?: { id?: string; name?: string };
+}
+
 export class StravaApiError extends Error {
   constructor(
     message: string,
@@ -162,4 +180,30 @@ export async function listActivities(
     throw new StravaApiError("Failed to list activities", res.status, body);
   }
   return (await res.json()) as StravaSummaryActivity[];
+}
+
+// ---------------------------------------------------------------------------
+// API: get one activity's detailed representation.
+// Docs: GET /activities/{id}  (costs 1 request per activity)
+// ---------------------------------------------------------------------------
+
+export async function getActivityDetail(
+  accessToken: string,
+  stravaId: bigint,
+): Promise<StravaDetailedActivity> {
+  const res = await fetch(`${STRAVA_API_BASE}/activities/${stravaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (res.status === 429) {
+    throw new StravaApiError("Strava rate limit exceeded", 429);
+  }
+  if (res.status === 404) {
+    throw new StravaApiError("Activity not found on Strava", 404);
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new StravaApiError("Failed to get activity detail", res.status, body);
+  }
+  return (await res.json()) as StravaDetailedActivity;
 }
