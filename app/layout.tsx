@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Runloop | Personal training intelligence",
   description: "A calmer way to build durable running consistency.",
+  icons: {
+    icon: "/Runloop%20Logo.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
