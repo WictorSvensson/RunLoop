@@ -2,59 +2,14 @@
 
 import { useRef, useState } from "react";
 import type { ActivityDTO } from "@/lib/strava/enrich";
-
-// ---------------------------------------------------------------------------
-// Formatting helpers (client-side; mirror the server formatters).
-// ---------------------------------------------------------------------------
-function formatDistance(meters: number | null): string {
-  if (meters == null) return "—";
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
-  return `${m}m ${s.toString().padStart(2, "0")}s`;
-}
-
-function formatPace(metersPerSecond: number | null): string {
-  if (!metersPerSecond || metersPerSecond <= 0) return "—";
-  const secPerKm = 1000 / metersPerSecond;
-  let m = Math.floor(secPerKm / 60);
-  let s = Math.round(secPerKm % 60);
-  if (s === 60) {
-    m += 1;
-    s = 0;
-  }
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatHr(bpm: number | null): string {
-  if (bpm == null) return "";
-  return `${Math.round(bpm)} bpm`;
-}
-
-function formatDate(iso: string): string {
-  // Pin locale + timezone so the server and client render identical text
-  // (otherwise SSR uses the server's locale/UTC and the browser uses the user's,
-  // causing a hydration mismatch).
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function toneFor(type: string | null): string {
-  const t = (type ?? "").toLowerCase();
-  if (t.includes("trail") || t.includes("long")) return "long";
-  if (t.includes("walk") || t.includes("hike")) return "recovery";
-  return "easy";
-}
+import {
+  formatDistance,
+  formatDuration,
+  formatPace,
+  formatHr,
+  formatDate,
+  toneFor,
+} from "@/lib/format";
 
 // One row + its expandable detail panel.
 function ActivityRow({ activity }: { activity: ActivityDTO }) {
