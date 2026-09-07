@@ -1,5 +1,7 @@
 # Runloop — AI Running & Recovery Coach
 
+> **Note (stale tech-stack section):** The "Technology Stack" section below lists Supabase (Postgres + Auth + RLS). The actual implementation uses **Prisma + a local Postgres instance via docker-compose**, with a single hardcoded dev user until real auth is built — see `AGENTS.md` for the accurate, current architecture. The product goal, design direction, and philosophy sections below remain accurate and are not affected by this.
+
 ## Project Goal
 
 Build a beautiful, modern web app called **Runloop** that acts as a personal long-term running coach.
