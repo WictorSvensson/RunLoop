@@ -50,6 +50,62 @@ export interface StravaDetailedActivity extends StravaSummaryActivity {
   gear?: { id?: string; name?: string };
 }
 
+
+export interface StravaLap {
+  name?: string;
+  lap_index?: number;
+  split?: number;
+  start_date?: string;
+  distance?: number;
+  moving_time?: number;
+  elapsed_time?: number;
+  start_index?: number;
+  end_index?: number;
+  average_speed?: number;
+  max_speed?: number;
+  average_heartrate?: number;
+  max_heartrate?: number;
+  average_cadence?: number;
+  average_watts?: number;
+  total_elevation_gain?: number;
+}
+
+export type StravaStreamKey =
+  | "time"
+  | "distance"
+  | "latlng"
+  | "altitude"
+  | "velocity_smooth"
+  | "heartrate"
+  | "cadence"
+  | "watts"
+  | "temp"
+  | "moving"
+  | "grade_smooth";
+
+export interface StravaStream {
+  data: number[] | boolean[] | Array<[number, number]>;
+  series_type?: string;
+  original_size?: number;
+  resolution?: string;
+}
+
+export type StravaStreamsByType = Partial<Record<StravaStreamKey, StravaStream>>;
+
+export const ANALYSIS_STREAM_KEYS: StravaStreamKey[] = [
+  "time",
+  "distance",
+  "latlng",
+  "altitude",
+  "velocity_smooth",
+  "heartrate",
+  "cadence",
+  "watts",
+  "temp",
+  "moving",
+  "grade_smooth",
+];
+
 export class StravaApiError extends Error {
   constructor(
     message: string,
@@ -207,3 +263,66 @@ export async function getActivityDetail(
   }
   return (await res.json()) as StravaDetailedActivity;
 }
+
+// ---------------------------------------------------------------------------
+// API: get laps for one activity.
+// Used by the analysis-ingestion prototype to preserve explicit workout splits.
+// ---------------------------------------------------------------------------
+
+export async function getActivityLaps(
+  accessToken: string,
+  stravaId: bigint,
+): Promise<StravaLap[]> {
+  const res = await fetch(`${STRAVA_API_BASE}/activities/${stravaId}/laps`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (res.status === 429) {
+    throw new StravaApiError("Strava rate limit exceeded", 429);
+  }
+  if (res.status === 404) {
+    return [];
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new StravaApiError("Failed to get activity laps", res.status, body);
+  }
+
+  return (await res.json()) as StravaLap[];
+}
+
+// ---------------------------------------------------------------------------
+// API: get raw streams for one activity.
+// We ask Strava to key the response by stream type so unavailable streams are
+// simply omitted instead of forcing placeholder data.
+// ---------------------------------------------------------------------------
+
+export async function getActivityStreams(
+  accessToken: string,
+  stravaId: bigint,
+  keys: StravaStreamKey[] = ANALYSIS_STREAM_KEYS,
+): Promise<StravaStreamsByType> {
+  const query = new URLSearchParams({
+    keys: keys.join(","),
+    key_by_type: "true",
+  });
+
+  const res = await fetch(
+    `${STRAVA_API_BASE}/activities/${stravaId}/streams?${query}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (res.status === 429) {
+    throw new StravaApiError("Strava rate limit exceeded", 429);
+  }
+  if (res.status === 404) {
+    return {};
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new StravaApiError("Failed to get activity streams", res.status, body);
+  }
+
+  return (await res.json()) as StravaStreamsByType;
+}
+
