@@ -94,7 +94,7 @@ export default async function Home() {
 
   const weekSummary = bucketWeeklyVolume(activities, WEEK_COUNT, now);
   const thisWeekStats = computeThisWeekStats(activities, now);
-  const recentActivities = recentRows.map(toActivityDTO);
+  const recentActivities = recentRows.map((row) => toActivityDTO(row));
 
   const maxWeekDistance = Math.max(
     ...weekSummary.weeks.map((w) => w.distanceKm),

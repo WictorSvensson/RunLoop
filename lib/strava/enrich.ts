@@ -31,9 +31,25 @@ export interface ActivityDTO {
   gearName: string | null;
   deviceName: string | null;
   detailFetched: boolean;
+  // analysis-ingestion state (laps + streams hydrated via the manual job)
+  analysisReady: boolean;
+  hasStreams: boolean;
+  laps: ActivityLapDTO[] | null; // null when not loaded (list rows), [] when none stored
 }
 
-export function toActivityDTO(a: Activity): ActivityDTO {
+export interface ActivityLapDTO {
+  lapIndex: number;
+  name: string | null;
+  distance: number | null;
+  averageSpeed: number | null;
+  averageHeartrate: number | null;
+}
+
+export function toActivityDTO(
+  a: Activity,
+  laps: ActivityLapDTO[] | null = null,
+  hasStreams = false,
+): ActivityDTO {
   return {
     id: a.id,
     name: a.name,
@@ -60,6 +76,9 @@ export function toActivityDTO(a: Activity): ActivityDTO {
     gearName: a.gearName,
     deviceName: a.deviceName,
     detailFetched: a.detailFetchedAt !== null,
+    analysisReady: a.analysisDataFetchedAt !== null,
+    hasStreams,
+    laps,
   };
 }
 
@@ -77,9 +96,14 @@ export async function enrichActivity(
     throw new Error("Activity not found");
   }
 
-  // Already enriched -> serve from DB, no API call.
+  // Already enriched -> serve from DB, no API call (laps/streams attached
+  // below when present).
   if (activity.detailFetchedAt !== null) {
-    return toActivityDTO(activity);
+    const [laps, hasStreams] = await Promise.all([
+      loadLapDTOs(activity.id),
+      hasStoredStreams(activity.id),
+    ]);
+    return toActivityDTO(activity, laps, hasStreams);
   }
 
   const connection = await prisma.stravaConnection.findUnique({
@@ -132,5 +156,44 @@ export async function enrichActivity(
   const fresh = await prisma.activity.findUniqueOrThrow({
     where: { id: activity.id },
   });
-  return toActivityDTO(fresh);
+  const [laps, hasStreams] = await Promise.all([
+    loadLapDTOs(activity.id),
+    hasStoredStreams(activity.id),
+  ]);
+  return toActivityDTO(fresh, laps, hasStreams);
+}
+
+// Hydrated analysis data attached to the detail DTO when present, so the
+// detail panel can show stored lap splits without an extra request. Absent
+// rows mean "not yet hydrated", not an error.
+async function loadLapDTOs(activityId: string): Promise<ActivityLapDTO[]> {
+  const lapRows = await prisma.activityLap.findMany({
+    where: { activityId },
+    orderBy: { lapIndex: "asc" },
+  });
+  return lapRows.map((lap) => ({
+    lapIndex: lap.lapIndex,
+    name: lap.name,
+    distance: lap.distance,
+    averageSpeed: lap.averageSpeed,
+    averageHeartrate: lap.averageHeartrate,
+  }));
+}
+
+// True only when stored streams contain at least one stream — matching
+// getAnalysisCoverage's withStreams count, so the panel never claims streams
+// are stored for an empty payload.
+async function hasStoredStreams(activityId: string): Promise<boolean> {
+  const streamRow = await prisma.activityStream.findUnique({
+    where: { activityId },
+    select: { payload: true },
+  });
+  if (!streamRow) return false;
+  const payload = streamRow.payload;
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    Object.keys(payload).length > 0
+  );
 }
