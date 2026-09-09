@@ -301,3 +301,32 @@
 	.app-shell .activity-detail span { font-size: 10px; }
 	.app-shell .coach-copy { margin-top: 32px; }
 }
+
+/* Daily check-in form extras + recent-history list. The form card stays a
+   light surface; history rows follow the surrounding shell theme. */
+.checkin-form .checkin-sleep-label,
+.checkin-form .checkin-notes-label { margin-top: 28px; }
+.field-error { color: #a5603f; font: 11px 'DM Mono', monospace; margin: 8px 0 0; }
+.checkin-history { margin-top: 48px; max-width: 680px; }
+.checkin-history .section-heading h2 { font: 400 27px 'Newsreader', serif; margin: 0; }
+.checkin-history ul { list-style: none; margin: 22px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.checkin-history-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.checkin-history-detail { flex: 1; min-width: 0; }
+.checkin-history-detail strong { display: block; font-size: 13px; color: var(--ink); }
+.checkin-history-detail span { display: block; color: var(--muted); font: 11px 'DM Mono', monospace; margin-top: 4px; }
+.checkin-edit-button { border: 1px solid #d5dbd2; background: #f8f9f5; border-radius: 3px; padding: 8px 14px; font-size: 12px; color: var(--ink); }
+.checkin-edit-button:hover { border-color: var(--ink); }
+.form-footer .form-success { color: #3e6b5e; }
+
+/* Light check-in card inside the dark app shell: re-assert ink text (see CSS
+   gotcha in AGENTS.md) and restyle history rows for the dark surface. */
+.app-shell .checkin-form { color: var(--ink); }
+.app-shell .field-error { color: #e0a27e; }
+.app-shell .form-footer .form-success { color: #8fc4b4; }
+.app-shell .checkin-history h2 { color: #f4f2e9; }
+.app-shell .checkin-history ul { border-color: #36423d; }
+.app-shell .checkin-history-row { border-color: #36423d; }
+.app-shell .checkin-history-detail strong { color: #f4f2e9; }
+.app-shell .checkin-history-detail span { color: #77847d; }
+.app-shell .checkin-edit-button { background: transparent; border-color: #53615b; color: #9ca69f; }
+.app-shell .checkin-edit-button:hover { border-color: #76a99c; color: #f4f2e9; }

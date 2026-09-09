@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 // The check-in modal is kept as a small client island so the dashboard page
-// itself can be an async Server Component. Persistence is not wired up yet —
-// no Server Action / route exists for DailyCheckin writes (see app/check-in/page.tsx,
-// which has the same limitation). Closing on "Save" mirrors that existing stub.
+// itself can be an async Server Component. Persistence lives in the
+// app/check-in Server Action (upsertDailyCheckin) — this modal is still a
+// stub that closes on "Save"; either wire it to that action or link to
+// /check-in instead of duplicating the form here.
 export function CheckInModal() {
   const [open, setOpen] = useState(false);
   const [energy, setEnergy] = useState(4);
