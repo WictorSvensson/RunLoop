@@ -20,6 +20,25 @@ model User {
   dailyCheckins    DailyCheckin[]
   stravaConnection StravaConnection?
   activities       Activity[]
+  coachBriefs      CoachBrief[]
+}
+
+// One LLM-generated coaching brief per generation click. Every row stores the
+// exact facts payload sent to the model, what it produced, and which model
+// produced it — the audit trail doubles as the spend record. Newest row wins
+// for display; history is kept, never overwritten.
+model CoachBrief {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facts          Json // bullet strings sent to the model
+  interpretation String // produced section 02
+  recommendation String // produced section 03
+  model          String // deployment name used
+  createdAt      DateTime @default(now())
+
+  // Matches the newest-wins lookup: findFirst({ where: { userId }, orderBy: { createdAt: "desc" } }).
+  @@index([userId, createdAt])
 }
 
 // Stores a user's Strava OAuth tokens. One connection per user.

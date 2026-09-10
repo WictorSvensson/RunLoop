@@ -51,6 +51,10 @@
 .insight-body a { color: #4f766c; }
 .app-shell .coach-facts li { color: #d1ddd5; }
 .app-shell .coach-facts li:before { color: #76a99c; }
+.coach-generate { margin-top: 22px; display: grid; gap: 10px; justify-items: start; }
+.coach-generate .subtle { margin: 0; }
+.generate-success { color: #3e6b5e; font: 11px 'DM Mono', monospace; margin: 0; }
+.app-shell .generate-success { color: #8fc4b4; }
 .app-shell .insight-body a { color: #8fc4b4; }
 .training-controls { display: flex; flex-direction: column; gap: 18px; align-items: flex-end; }
 .training-controls .subtle { margin: 0 0 8px; }

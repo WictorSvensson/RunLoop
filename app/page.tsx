@@ -73,7 +73,7 @@ export default async function Home() {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
 
-  const [activities, recentRows, todaysCheckin] = await Promise.all([
+  const [activities, recentRows, todaysCheckin, latestBrief] = await Promise.all([
     prisma.activity.findMany({
       where: {
         userId: user.id,
@@ -89,6 +89,10 @@ export default async function Home() {
     }),
     prisma.dailyCheckin.findUnique({
       where: { userId_date: { userId: user.id, date: today } },
+    }),
+    prisma.coachBrief.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -328,21 +332,31 @@ export default async function Home() {
         </section>
       </div>
 
-      {/* TODO: Replace mock coach briefing with generated coaching analysis */}
       <section className="coach-card">
         <div className="coach-header">
           <p className="eyebrow">RunLoop Coach</p>
-          <span className="confidence">Not yet available</span>
+          <span className="confidence">
+            {latestBrief
+              ? `Generated ${latestBrief.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+              : "Not yet available"}
+          </span>
         </div>
         <div className="coach-copy">
-          <p className="coach-kicker">Observation / interpretation</p>
-          <h2>Coaching analysis isn&apos;t wired up yet.</h2>
-          <p>
-            This card will surface generated coaching insights once the
-            analysis engine (see Docs/RUNLOOP_ANALYSIS_ENGINE_SPEC.md) is
-            built. For now it reflects real training data elsewhere on
-            this page, but no interpretation is computed here.
-          </p>
+          <p className="coach-kicker">Recommendation</p>
+          {latestBrief ? (
+            <>
+              <h2>{latestBrief.recommendation}</h2>
+              <p>{latestBrief.interpretation}</p>
+            </>
+          ) : (
+            <>
+              <h2>Coaching analysis isn&apos;t generated yet.</h2>
+              <p>
+                Generate your first AI brief on the Coach page — until then
+                this card stays quiet rather than guessing.
+              </p>
+            </>
+          )}
         </div>
         <div className="coach-actions">
           <Link href="/coach" className="coach-link">
