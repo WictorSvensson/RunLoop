@@ -17,6 +17,7 @@
     "import:suunto": "node scripts/import-suunto/import.ts"
   },
   "dependencies": {
+    "@flow-js/garmin-connect": "^1.6.18",
     "@garmin/fitsdk": "^21.214.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",

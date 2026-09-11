@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { findDuplicateCandidate } from "@/lib/analysis/duplicate";
 import { getValidAccessToken, listActivities } from "./client";
 
 export interface ImportResult {
@@ -80,31 +81,21 @@ export async function importStravaActivities(
       const stravaId = BigInt(a.id);
       const externalId = String(a.id);
 
-      // Suunto-first database: skip Strava rows that duplicate an already
-      // imported Suunto session (same ±10 min start window and comparable
-      // elapsed time). Mirror of the guard in scripts/import-suunto/import.ts.
-      // With no Strava connection this never runs; it exists so a future
-      // reconnect can't silently double-count history. Strict `< 600`
-      // matches the Suunto side exactly (a twin 600 s out is distinct both
-      // ways). Null elapsed on either side falls back to the time window
-      // alone — safer against duplicates than importing blind.
+      // Twin check against every other source (SUUNTO today, GARMIN once
+      // connected) via the shared matcher — same ±10 min / ±300 s rule every
+      // importer uses. With a single source connected this never fires; it
+      // exists so multi-brand history can't double-count.
       const windowStart = new Date(startDate.getTime() - 10 * 60 * 1000);
       const windowEnd = new Date(startDate.getTime() + 10 * 60 * 1000);
-      const suuntoTwin = await prisma.activity.findFirst({
+      const otherRows = await prisma.activity.findMany({
         where: {
           userId,
-          source: "SUUNTO",
+          source: { not: "STRAVA" },
           startDate: { gt: windowStart, lt: windowEnd },
         },
-        select: { id: true, elapsedTime: true },
+        select: { startDate: true, elapsedTime: true },
       });
-      const elapsed = a.elapsed_time ?? null;
-      const isDuplicate =
-        suuntoTwin !== null &&
-        (elapsed === null ||
-          suuntoTwin.elapsedTime === null ||
-          Math.abs(suuntoTwin.elapsedTime - elapsed) <= 300);
-      if (isDuplicate) {
+      if (findDuplicateCandidate(otherRows, startDate, a.elapsed_time ?? null)) {
         duplicates++;
         continue;
       }
