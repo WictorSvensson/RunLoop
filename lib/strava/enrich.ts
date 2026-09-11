@@ -97,8 +97,9 @@ export async function enrichActivity(
   }
 
   // Already enriched -> serve from DB, no API call (laps/streams attached
-  // below when present).
-  if (activity.detailFetchedAt !== null) {
+  // below when present). Suunto rows are enriched at import time and never
+  // touch the Strava API (stravaId is null for them).
+  if (activity.detailFetchedAt !== null || activity.source === "SUUNTO") {
     const [laps, hasStreams] = await Promise.all([
       loadLapDTOs(activity.id),
       hasStoredStreams(activity.id),
@@ -114,6 +115,9 @@ export async function enrichActivity(
   }
 
   const accessToken = await getValidAccessToken(connection);
+  if (activity.stravaId === null) {
+    throw new Error("Cannot enrich a non-Strava activity via the Strava API.");
+  }
   const detail = await getActivityDetail(accessToken, activity.stravaId);
 
   const startDateLocal = detail.start_date_local

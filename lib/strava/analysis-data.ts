@@ -82,6 +82,12 @@ export async function hydrateActivityAnalysisData(
 
   if (activity.analysisDataFetchedAt !== null) return "already_ready";
 
+  // Suunto rows arrive with laps/streams already stored at import time —
+  // never call the Strava API for them (activity.stravaId is null).
+  if (activity.source === "SUUNTO" || activity.stravaId === null) {
+    throw new Error("Suunto activities are hydrated at import time, not via Strava.");
+  }
+
   const connection = await prisma.stravaConnection.findUnique({
     where: { userId },
   });
@@ -169,9 +175,14 @@ export async function hydrateHistoricalAnalysisData(
 ): Promise<AnalysisHydrationResult> {
   const limit = clampAnalysisBatchSize(options.limit);
 
+  // Strava-API hydration only: Suunto rows arrive hydrated at import time
+  // (analysisDataFetchedAt set by the importer) and enrich()/hydrate() throw
+  // for them — including them here would poison every batch with permanent
+  // unfixable failures.
   const pending = await prisma.activity.findMany({
     where: {
       userId,
+      source: "STRAVA",
       type: { in: [...RUNNING_TYPES] },
       analysisDataFetchedAt: null,
     },

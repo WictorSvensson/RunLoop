@@ -58,13 +58,18 @@ model StravaConnection {
   updatedAt      DateTime @updatedAt
 }
 
-// A training activity imported from Strava. Only the objective fields Strava
-// provides are mapped here; subjective fields (RPE, shoes, symptoms) stay manual.
+// A training activity imported from Strava or Suunto. Only the objective
+// fields the source provides are mapped here; subjective fields (RPE, shoes,
+// symptoms) stay manual. `source` + `externalId` is the dedup key across
+// providers: Strava rows use externalId = String(stravaId), Suunto rows use
+// the export filename stem (e.g. "2023-05-02_17.15.12-running").
 model Activity {
   id                 String    @id @default(cuid())
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stravaId           BigInt // Strava activity id (unique per athlete)
+  stravaId           BigInt? // Strava activity id (null for SUUNTO rows)
+  source             String    @default("STRAVA") // "STRAVA" | "SUUNTO"
+  externalId         String // provider-stable id for idempotent re-imports (required: NULLs bypass unique enforcement)
   name               String?
   type               String? // Strava sport_type, e.g. "Run", "TrailRun"
   startDate          DateTime // activity start (UTC)
@@ -101,8 +106,8 @@ model Activity {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  // Same Strava activity is never imported twice for a user.
-  @@unique([userId, stravaId])
+  // Same activity is never imported twice for a user, regardless of source.
+  @@unique([userId, source, externalId])
   @@index([userId])
   @@index([userId, startDate])
 }

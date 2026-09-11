@@ -5,6 +5,7 @@ export interface ImportResult {
   imported: number; // newly created activities
   updated: number; // existing activities refreshed
   skipped: number; // rows we couldn't parse (e.g. bad date)
+  duplicates: number; // rows matching an existing Suunto session, skipped
   pagesFetched: number;
 }
 
@@ -36,10 +37,13 @@ export async function importStravaActivities(
   // High-water mark: the latest activity start date we've already imported.
   // Fetch after that (minus overlap) so edits near the boundary are caught.
   // A full resync ignores this and pulls the entire history (idempotent upsert).
+  // High-water mark scoped to STRAVA rows only: Suunto backfill rows share
+  // the table and can be newer than the last Strava sync — including them
+  // would jump `after` forward and silently skip unseen Strava activities.
   let after: number | undefined;
   if (!options.fullResync) {
     const latest = await prisma.activity.findFirst({
-      where: { userId },
+      where: { userId, source: "STRAVA" },
       orderBy: { startDate: "desc" },
       select: { startDate: true },
     });
@@ -51,6 +55,7 @@ export async function importStravaActivities(
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+  let duplicates = 0;
   let page = 1;
   let pagesFetched = 0;
 
@@ -73,6 +78,37 @@ export async function importStravaActivities(
       }
 
       const stravaId = BigInt(a.id);
+      const externalId = String(a.id);
+
+      // Suunto-first database: skip Strava rows that duplicate an already
+      // imported Suunto session (same ±10 min start window and comparable
+      // elapsed time). Mirror of the guard in scripts/import-suunto/import.ts.
+      // With no Strava connection this never runs; it exists so a future
+      // reconnect can't silently double-count history. Strict `< 600`
+      // matches the Suunto side exactly (a twin 600 s out is distinct both
+      // ways). Null elapsed on either side falls back to the time window
+      // alone — safer against duplicates than importing blind.
+      const windowStart = new Date(startDate.getTime() - 10 * 60 * 1000);
+      const windowEnd = new Date(startDate.getTime() + 10 * 60 * 1000);
+      const suuntoTwin = await prisma.activity.findFirst({
+        where: {
+          userId,
+          source: "SUUNTO",
+          startDate: { gt: windowStart, lt: windowEnd },
+        },
+        select: { id: true, elapsedTime: true },
+      });
+      const elapsed = a.elapsed_time ?? null;
+      const isDuplicate =
+        suuntoTwin !== null &&
+        (elapsed === null ||
+          suuntoTwin.elapsedTime === null ||
+          Math.abs(suuntoTwin.elapsedTime - elapsed) <= 300);
+      if (isDuplicate) {
+        duplicates++;
+        continue;
+      }
+
       const data = {
         name: a.name ?? null,
         type: a.sport_type ?? a.type ?? null,
@@ -90,13 +126,13 @@ export async function importStravaActivities(
       // Determine new-vs-existing explicitly (reliable, unlike comparing
       // createdAt/updatedAt timestamps).
       const existing = await prisma.activity.findUnique({
-        where: { userId_stravaId: { userId, stravaId } },
+        where: { userId_source_externalId: { userId, source: "STRAVA", externalId } },
         select: { id: true },
       });
 
       await prisma.activity.upsert({
-        where: { userId_stravaId: { userId, stravaId } },
-        create: { userId, stravaId, ...data },
+        where: { userId_source_externalId: { userId, source: "STRAVA", externalId } },
+        create: { userId, stravaId, source: "STRAVA", externalId, ...data },
         update: data,
       });
 
@@ -114,5 +150,5 @@ export async function importStravaActivities(
     data: { lastSyncedAt: new Date() },
   });
 
-  return { imported, updated, skipped, pagesFetched };
+  return { imported, updated, skipped, duplicates, pagesFetched };
 }
