@@ -70,4 +70,50 @@ describe("extractZip", () => {
     raw.writeUInt16LE(99, 8);
     expect(() => extractZip(new Uint8Array(raw))).toThrow(/method 99/);
   });
+
+  it("extracts a bit-3 streaming entry via its descriptor signature", () => {
+    const payload = new TextEncoder().encode("streamed-fit-bytes ".repeat(50));
+    const deflated = deflateRawSync(payload);
+    const name = "24323144369_ACTIVITY.fit";
+    const nameBytes = Buffer.from(name, "utf8");
+    const header = Buffer.alloc(30);
+    header.writeUInt32LE(0x04034b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(0x08, 6); // flags: bit 3 = data descriptor
+    header.writeUInt16LE(8, 8); // method: deflate
+    header.writeUInt32LE(0, 18); // sizes zeroed (streaming)
+    header.writeUInt32LE(0, 22);
+    header.writeUInt16LE(nameBytes.length, 26);
+    header.writeUInt16LE(0, 28);
+    const descriptor = Buffer.alloc(16);
+    descriptor.writeUInt32LE(0x08074b50, 0); // descriptor signature
+    descriptor.writeUInt32LE(0, 4); // crc (unchecked)
+    descriptor.writeUInt32LE(deflated.length, 8);
+    descriptor.writeUInt32LE(payload.length, 12);
+    // Central-directory signature after the descriptor (validates the match).
+    const central = Buffer.alloc(4);
+    central.writeUInt32LE(0x02014b50, 0);
+    const zip = new Uint8Array(
+      Buffer.concat([header, nameBytes, Buffer.from(deflated), descriptor, central]),
+    );
+    const entries = extractZip(zip);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(name);
+    expect(Buffer.from(entries[0].data)).toEqual(Buffer.from(payload));
+  });
+
+  it("throws on bit-3 entries without a descriptor signature", () => {
+    const payload = new TextEncoder().encode("x".repeat(64));
+    const nameBytes = Buffer.from("a.fit", "utf8");
+    const header = Buffer.alloc(30);
+    header.writeUInt32LE(0x04034b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(0x08, 6);
+    header.writeUInt16LE(0, 8);
+    header.writeUInt16LE(nameBytes.length, 26);
+    const zip = new Uint8Array(
+      Buffer.concat([header, nameBytes, Buffer.from(payload)]),
+    );
+    expect(() => extractZip(zip)).toThrow(/without signature/);
+  });
 });

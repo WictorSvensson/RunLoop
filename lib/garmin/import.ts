@@ -30,6 +30,8 @@ export interface GarminImportResult {
   fitMerged: number; // rows enriched with FIT data
   fitFailed: number; // rows kept summary-only (download/decode failed)
   pagesFetched: number;
+  /** FIT failure reasons (truncated messages) → count. Diagnostic only. */
+  fitErrors: Record<string, number>;
 }
 
 const PAGE_SIZE = 100;
@@ -40,6 +42,19 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 50;
 
 export const GARMIN_SOURCE = "GARMIN";
+
+/** Counts a FIT failure by (truncated) reason; warns the first few in full. */
+function recordFitError(
+  result: GarminImportResult,
+  externalId: string,
+  message: string,
+): void {
+  const reason = message.slice(0, 160);
+  result.fitErrors[reason] = (result.fitErrors[reason] ?? 0) + 1;
+  if (result.fitFailed < 5) {
+    console.warn(`Garmin FIT failed for activity ${externalId}: ${reason}`);
+  }
+}
 
 /** Minimal summary so the shared FIT merge applies unchanged (no GPX here). */
 function summaryFromMapped(m: MappedGarminActivity): TrackSummary {
@@ -62,10 +77,13 @@ async function importPage(
   activities: IActivity[],
   result: GarminImportResult,
   cutoff: Date | null,
+  maxActivities: number | null,
+  processed: { count: number },
 ): Promise<boolean> {
-  // Returns true when the cutoff was reached (caller stops paginating).
-  // One twin-check query per page (not per activity): cover the page's full
-  // date range ± window, then match in memory with the shared matcher.
+  // Returns true when the cutoff — or the diagnostic cap — was reached
+  // (caller stops paginating). One twin-check query per page (not per
+  // activity): cover the page's full date range ± window, then match in
+  // memory with the shared matcher.
   const mappedAll: (MappedGarminActivity | null)[] = activities.map((a) => {
     const m = mapGarminActivity(a);
     if (!m) result.skipped++;
@@ -93,7 +111,9 @@ async function importPage(
     const m = mappedAll[i];
     if (!m) continue; // already counted as skipped
     if (cutoff && m.startDate < cutoff) return true;
+    if (maxActivities !== null && processed.count >= maxActivities) return true;
     await importOne(userId, client, activities[i], m, twins, result);
+    processed.count++;
   }
   return false;
 }
@@ -113,12 +133,23 @@ async function importOne(
     return;
   }
 
-  // FIT download (best-effort; summary-only row when it fails).
+  // FIT download (best-effort; summary-only row when it fails). Failures
+  // are counted by reason and the first few logged in full — a silent catch
+  // here once hid a 467-row systematic FIT outage.
   let fit = null;
   try {
-    fit = decodeFit(await downloadFitBytes(client, a.activityId));
-  } catch {
+    const bytes = await downloadFitBytes(client, a.activityId);
+    fit = decodeFit(bytes);
+    if (!fit) {
+      recordFitError(result, mapped.externalId, `decoded no session (${bytes.byteLength} bytes)`);
+    }
+  } catch (err) {
     fit = null;
+    recordFitError(
+      result,
+      mapped.externalId,
+      err instanceof Error ? err.message : String(err),
+    );
   }
   if (fit) result.fitMerged++;
   else result.fitFailed++;
@@ -210,8 +241,15 @@ async function importOne(
 
 export async function importGarminActivities(
   userId: string,
-  options: { fullResync?: boolean } = {},
+  options: { fullResync?: boolean; maxActivities?: number } = {},
 ): Promise<GarminImportResult> {
+  // maxActivities caps total rows processed (diagnostics: reproduce on a
+  // couple of activities via ?limit=N instead of a 6-minute full sync).
+  const maxActivities =
+    options.maxActivities !== undefined && options.maxActivities > 0
+      ? Math.floor(options.maxActivities)
+      : null;
+  const processed = { count: 0 };
   return withGarminClient(userId, async (client) => {
     const result: GarminImportResult = {
       imported: 0,
@@ -221,6 +259,7 @@ export async function importGarminActivities(
       fitMerged: 0,
       fitFailed: 0,
       pagesFetched: 0,
+      fitErrors: {},
     };
 
     if (options.fullResync) {
@@ -229,8 +268,8 @@ export async function importGarminActivities(
       for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
         const page = await client.getActivities(start, PAGE_SIZE);
         result.pagesFetched++;
-        await importPage(userId, client, page, result, null);
-        if (page.length < PAGE_SIZE) break;
+        const done = await importPage(userId, client, page, result, null, maxActivities, processed);
+        if (done || page.length < PAGE_SIZE) break;
         start += PAGE_SIZE;
       }
       await prisma.garminConnection.update({
@@ -257,7 +296,7 @@ export async function importGarminActivities(
       const page = await client.getActivities(start, PAGE_SIZE);
       result.pagesFetched++;
       if (page.length === 0) break;
-      const reachedCutoff = await importPage(userId, client, page, result, cutoff);
+      const reachedCutoff = await importPage(userId, client, page, result, cutoff, maxActivities, processed);
       if (reachedCutoff || page.length < PAGE_SIZE) break;
       start += PAGE_SIZE;
     }
