@@ -1,60 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { ActivityDTO } from "@/lib/strava/enrich";
-
-// ---------------------------------------------------------------------------
-// Formatting helpers (client-side; mirror the server formatters).
-// ---------------------------------------------------------------------------
-function formatDistance(meters: number | null): string {
-  if (meters == null) return "—";
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
-  return `${m}m ${s.toString().padStart(2, "0")}s`;
-}
-
-function formatPace(metersPerSecond: number | null): string {
-  if (!metersPerSecond || metersPerSecond <= 0) return "—";
-  const secPerKm = 1000 / metersPerSecond;
-  let m = Math.floor(secPerKm / 60);
-  let s = Math.round(secPerKm % 60);
-  if (s === 60) {
-    m += 1;
-    s = 0;
-  }
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatHr(bpm: number | null): string {
-  if (bpm == null) return "";
-  return `${Math.round(bpm)} bpm`;
-}
-
-function formatDate(iso: string): string {
-  // Pin locale + timezone so the server and client render identical text
-  // (otherwise SSR uses the server's locale/UTC and the browser uses the user's,
-  // causing a hydration mismatch).
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function toneFor(type: string | null): string {
-  const t = (type ?? "").toLowerCase();
-  if (t.includes("trail") || t.includes("long")) return "long";
-  if (t.includes("walk") || t.includes("hike")) return "recovery";
-  return "easy";
-}
+import type { ActivityDTO } from "@/lib/activity-detail";
+import {
+  formatDistance,
+  formatDuration,
+  formatPace,
+  formatHr,
+  formatDate,
+  toneFor,
+} from "@/lib/format";
 
 // One row + its expandable detail panel.
 function ActivityRow({ activity }: { activity: ActivityDTO }) {
@@ -72,9 +27,12 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
   async function toggle() {
     const next = !open;
     setOpen(next);
-    // Fetch detail on first open only. useRef guard is synchronous, so a rapid
+    // Fetch detail on first open only. List rows carry laps:null (list DTOs
+    // don't load relations), so an analysis-ready row must also refetch to get
+    // its stored laps — otherwise the panel would show no lap table despite
+    // the row's readiness dot. useRef guard is synchronous, so a rapid
     // double-click can't start two fetches before state updates commit.
-    if (next && detail === null && !inFlight.current) {
+    if (next && (detail === null || detail.laps === null) && !inFlight.current) {
       inFlight.current = true;
       setLoading(true);
       setError(null);
@@ -105,7 +63,17 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
             {tone === "long" ? "↗" : tone === "recovery" ? "◌" : "∿"}
           </div>
           <div>
-            <strong>{activity.name ?? activity.type ?? "Run"}</strong>
+            <strong>
+              {activity.name ?? activity.type ?? "Run"}
+              {activity.analysisReady && (
+                <span
+                  className="analysis-dot"
+                  role="img"
+                  title="Laps and streams stored for analysis"
+                  aria-label="Analysis data stored"
+                />
+              )}
+            </strong>
             <span>{formatDate(activity.startDate)}</span>
           </div>
         </div>
@@ -119,7 +87,7 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
 
       {open && (
         <div className="activity-panel" id={panelId} role="region">
-          {loading && <p className="subtle">Loading details from Strava…</p>}
+          {loading && <p className="subtle">Loading details…</p>}
           {error && <p className="subtle activity-panel-error">{error}</p>}
           {detail && !loading && <ActivityDetailPanel detail={detail} />}
         </div>
@@ -161,6 +129,36 @@ function ActivityDetailPanel({ detail }: { detail: ActivityDTO }) {
         </div>
       ) : (
         <p className="subtle">No extra details available for this activity.</p>
+      )}
+
+      {detail.laps !== null && detail.laps.length > 0 && (
+        <div className="lap-table" role="table" aria-label="Lap splits">
+          <div className="lap-header lap-row" role="row">
+            <span role="columnheader">Lap</span>
+            <span role="columnheader">Distance</span>
+            <span role="columnheader">Pace /km</span>
+            <span role="columnheader">Avg HR</span>
+          </div>
+          {detail.laps.map((lap) => (
+            <div className="lap-row" role="row" key={lap.lapIndex}>
+              <span role="cell">{lap.name ?? `Lap ${lap.lapIndex}`}</span>
+              <span role="cell">{formatDistance(lap.distance)}</span>
+              <span role="cell">{formatPace(lap.averageSpeed)}</span>
+              <span role="cell">
+                {lap.averageHeartrate != null
+                  ? `${Math.round(lap.averageHeartrate)} bpm`
+                  : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {detail.analysisReady && (
+        <p className="subtle activity-panel-meta">
+          {detail.hasStreams
+            ? "Per-second streams stored for analysis."
+            : "No streams stored for this activity."}
+        </p>
       )}
 
       {detail.gearName && (

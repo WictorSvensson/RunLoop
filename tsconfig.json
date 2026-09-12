@@ -9,6 +9,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Lets scripts/import-suunto use explicit `./gpx.ts` imports so the same
+    // files typecheck under tsc AND run uncompiled under Node type-stripping.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

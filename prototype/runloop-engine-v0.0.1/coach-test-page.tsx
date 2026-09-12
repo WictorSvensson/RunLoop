@@ -55,7 +55,7 @@ export default function CoachTestPage() {
           </p>
 
           <ul>
-            {analysis.recommendation.parameters.map(
+            {(analysis.recommendation.parameters ?? []).map(
               (parameter) => (
                 <li key={parameter}>
                   {parameter}

@@ -1,16 +1,135 @@
-"use client";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/current-user";
+import {
+  isFutureDateKey,
+  parseDateKey,
+  toDateKeyUTC,
+  type CheckinFormValues,
+} from "@/lib/checkin/checkin";
+import { CheckInForm, type CheckinHistoryItem } from "./CheckInForm";
+import type { DailyCheckin } from "@/generated/prisma/client";
 
-import { useState } from "react";
+// Reads live DB state (selected check-in + recent history) on every load, so
+// it must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
 
-/* eslint-disable @next/next/no-html-link-for-pages */
-export default function CheckInPage() {
-  const [saved, setSaved] = useState(false);
-  const [energy, setEnergy] = useState(4);
-  const [sleepQuality, setSleepQuality] = useState("Good");
-  const [soreness, setSoreness] = useState("None");
-  const [symptoms, setSymptoms] = useState("None");
+const HISTORY_TAKE = 14;
+
+function toFormValues(row: DailyCheckin): CheckinFormValues {
+  return {
+    dateKey: toDateKeyUTC(row.date),
+    weight: row.weight,
+    sleepDuration: row.sleepDuration,
+    sleepQuality: row.sleepQuality,
+    energy: row.energy,
+    soreness: row.soreness,
+    symptoms: row.symptoms,
+    notes: row.notes,
+  };
+}
+
+function toHistoryItem(row: DailyCheckin): CheckinHistoryItem {
+  return {
+    ...toFormValues(row),
+    displayDate: row.date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }),
+  };
+}
+
+function blankValues(dateKey: string): CheckinFormValues {
+  return {
+    dateKey,
+    weight: null,
+    sleepDuration: null,
+    sleepQuality: null,
+    energy: null,
+    soreness: null,
+    symptoms: null,
+    notes: null,
+  };
+}
+
+export default async function CheckInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const now = new Date();
+  const todayKey = toDateKeyUTC(now);
+  // Pinned to UTC to match todayKey (date keys are UTC calendar days) — a
+  // server-local timezone could otherwise disagree with the form around
+  // midnight.
+  const todayDisplay = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  const { date: rawDateParam } = await searchParams;
+  const dateParam = rawDateParam?.trim();
+  const requestedKey =
+    dateParam && parseDateKey(dateParam) && !isFutureDateKey(dateParam, now)
+      ? dateParam
+      : todayKey;
+
+  const recentRows = await prisma.dailyCheckin.findMany({
+    where: { userId: user.id },
+    orderBy: { date: "desc" },
+    take: HISTORY_TAKE,
+  });
+
+  // A ?date= older than the history window still deserves its stored values:
+  // fetch it directly so editing never starts from a misleading blank form
+  // that would silently update on save.
+  const inWindow = recentRows.some((row) => toDateKeyUTC(row.date) === requestedKey);
+  const outOfWindowRow =
+    inWindow || requestedKey === todayKey
+      ? null
+      : await prisma.dailyCheckin.findUnique({
+          where: {
+            userId_date: {
+              userId: user.id,
+              date: new Date(`${requestedKey}T00:00:00.000Z`),
+            },
+          },
+        });
+
+  const recent = recentRows.map(toHistoryItem);
+  const selected =
+    recentRows.find((row) => toDateKeyUTC(row.date) === requestedKey) ??
+    outOfWindowRow;
+  const initial = selected ? toFormValues(selected) : blankValues(requestedKey);
+  const checkedInToday = recentRows.some(
+    (row) => toDateKeyUTC(row.date) === todayKey,
+  );
 
   return (
-    <main className="app-shell"><aside className="sidebar"><a className="brand" href="/"><span className="brand-mark">r</span> runloop</a><nav className="main-nav route-nav"><span className="nav-label">Workspace</span>{["Dashboard", "Daily check-in", "Training", "Analytics", "Coach"].map((item, index) => <a className={`nav-item ${item === "Daily check-in" ? "active" : ""}`} href={index === 0 ? "/" : `/${["", "check-in", "training", "analytics", "coach"][index]}`} key={item}><span className="nav-icon">{["⌂", "✧", "◒", "◌", "◈"][index]}</span>{item}</a>)}</nav><div className="sidebar-bottom"><a className="nav-item" href="#"><span className="nav-icon">⚙</span>Settings</a><div className="sync-status"><span className="status-pulse" />Last synced just now</div></div></aside><section className="content"><header className="topbar"><a className="mobile-brand" href="/"><span className="brand-mark">r</span> runloop</a><div className="breadcrumb"><span>Workspace</span><b>/</b>Daily check-in</div><div className="top-actions"><div className="top-avatar">K</div></div></header><div className="route-wrap"><div className="route-intro"><p className="eyebrow">Tuesday, September 4, 2026</p><h1>How are you feeling today?</h1><p className="subtle">A quick pulse check. Less than a minute, and no scores, no judgement.</p></div><form className="checkin-form" onSubmit={(event) => { event.preventDefault(); setSaved(true); }}><div className="form-grid"><label>Weight<input defaultValue="75.2 kg" /></label><label>Sleep duration<input defaultValue="7h 12m" /></label></div><fieldset><legend>Sleep quality</legend><div className="option-row">{["Poor", "Okay", "Good", "Excellent"].map((option) => <button type="button" key={option} className={sleepQuality === option ? "selected" : ""} onClick={() => setSleepQuality(option)}>{option}</button>)}</div></fieldset><fieldset><legend>Energy</legend><div className="option-row compact">{[1, 2, 3, 4, 5].map((option) => <button type="button" key={option} className={energy === option ? "selected" : ""} onClick={() => setEnergy(option)}>{option}</button>)}</div></fieldset><div className="form-grid"><fieldset><legend>Soreness</legend><select value={soreness} onChange={(event) => setSoreness(event.target.value)}><option>None</option><option>Mild</option><option>Moderate</option><option>High</option></select></fieldset><fieldset><legend>Symptoms</legend><select value={symptoms} onChange={(event) => setSymptoms(event.target.value)}><option>None</option><option>Mild</option><option>Moderate</option><option>High</option></select></fieldset></div><label>Notes<textarea placeholder="Anything worth remembering?" rows={4} /></label><div className="form-footer"><span>{saved ? "Check-in saved locally" : "Your check-in stays private to you."}</span><button className="save-button" type="submit">Save check-in</button></div></form></div></section></main>
+    <div className="route-wrap">
+      <div className="route-intro">
+        <p className="eyebrow">
+          {todayDisplay} · {checkedInToday ? "Checked in today" : "No check-in yet today"}
+        </p>
+        <h1>How are you feeling today?</h1>
+        <p className="subtle">
+          A quick pulse check. Less than a minute, and no scores, no judgement.
+        </p>
+      </div>
+      <CheckInForm
+        key={requestedKey}
+        initial={initial}
+        recent={recent}
+        todayKey={todayKey}
+        initialIsUpdate={selected != null}
+      />
+    </div>
   );
 }

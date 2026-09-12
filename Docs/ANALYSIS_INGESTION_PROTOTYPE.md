@@ -1,5 +1,10 @@
 # RunLoop analysis-ingestion prototype
 
+> Historical note: the Strava integration (import, OAuth, per-activity
+> hydration jobs) was removed — Garmin and Suunto rows arrive with laps +
+> streams stored at import time. References below to Strava routes/jobs
+> describe the prototype era, not the current app.
+
 This branch does **not** train an LLM or claim to infer fitness yet. It adds the
 historical data layer needed before workout classification and comparable-session
 analysis can be trustworthy.
