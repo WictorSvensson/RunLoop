@@ -19,6 +19,7 @@ model User {
 
   dailyCheckins    DailyCheckin[]
   stravaConnection StravaConnection?
+  garminConnection GarminConnection?
   activities       Activity[]
   coachBriefs      CoachBrief[]
 }
@@ -58,13 +59,35 @@ model StravaConnection {
   updatedAt      DateTime @updatedAt
 }
 
-// A training activity imported from Strava. Only the objective fields Strava
-// provides are mapped here; subjective fields (RPE, shoes, symptoms) stay manual.
+// Stores a user's Garmin Connect tokens (unofficial API). One connection per
+// user. The Garmin password is NEVER stored — it is used once at connect
+// time to obtain tokens, and only the exported token pair below persists.
+// Tokens are re-exported and saved after every use since refresh rotates them.
+model GarminConnection {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  garminUserId   String? // Garmin profile id (display/diagnostics only)
+  username       String? // login email (hint for reconnect; not a secret)
+  tokenJson      String // JSON.stringify of the library's exported token pair
+  expiresAt      DateTime? // oauth2 expiry when known (null = unknown)
+  lastSyncedAt   DateTime? // last successful activity import
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// A training activity imported from Strava or Suunto. Only the objective
+// fields the source provides are mapped here; subjective fields (RPE, shoes,
+// symptoms) stay manual. `source` + `externalId` is the dedup key across
+// providers: Strava rows use externalId = String(stravaId), Suunto rows use
+// the export filename stem (e.g. "2023-05-02_17.15.12-running").
 model Activity {
   id                 String    @id @default(cuid())
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stravaId           BigInt // Strava activity id (unique per athlete)
+  stravaId           BigInt? // Strava activity id (null for non-Strava rows)
+  source             String    @default("STRAVA") // "STRAVA" | "SUUNTO" | "GARMIN"
+  externalId         String // provider-stable id for idempotent re-imports (required: NULLs bypass unique enforcement)
   name               String?
   type               String? // Strava sport_type, e.g. "Run", "TrailRun"
   startDate          DateTime // activity start (UTC)
@@ -101,8 +124,8 @@ model Activity {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  // Same Strava activity is never imported twice for a user.
-  @@unique([userId, stravaId])
+  // Same activity is never imported twice for a user, regardless of source.
+  @@unique([userId, source, externalId])
   @@index([userId])
   @@index([userId, startDate])
 }
@@ -158,7 +181,12 @@ model DailyCheckin {
   soreness      Severity?
   symptoms      Severity?
   notes         String?
-  createdAt     DateTime     @default(now())
+  // Garmin health fields (also fillable by future sources; all optional and
+  // manual-entry-safe like sleep — importers only fill empties via COALESCE).
+  avgHrv        Int? // ms, 7-day or daily average depending on source
+  restingHr     Int? // bpm
+  bodyBattery   Int? // 0-100 Garmin Body Battery
+  createdAt     DateTime @default(now())
   updatedAt     DateTime     @updatedAt
 
   // One check-in per user per day.
