@@ -57,12 +57,16 @@ function expiresAtFrom(tokens: IGarminTokens): Date | null {
  * One-time connect with raw credentials. Returns tokens + profile id for
  * persistence. Throws GarminAuthError on bad credentials / MFA challenges
  * (message preserved for UI display).
+ *
+ * NOTE: credentials go in the constructor, not just login(). The library
+ * falls back to a garmin.config.json file when constructed bare — which
+ * doesn't exist here — and throws "Missing credentials" before login runs.
  */
 export async function connectGarmin(
   username: string,
   password: string,
 ): Promise<{ tokens: IGarminTokens; garminUserId: string | null; displayName: string | null }> {
-  const client = new GarminConnect();
+  const client = new GarminConnect({ username, password });
   try {
     await client.login(username, password);
   } catch (err) {
@@ -117,7 +121,9 @@ export async function loadClient(userId: string): Promise<GarminConnect> {
     throw new GarminAuthError("No Garmin connection. Connect Garmin first.");
   }
   const tokens = parseStoredTokens(connection.tokenJson);
-  const client = new GarminConnect();
+  // Placeholder credentials: satisfy the constructor's truthiness check
+  // (see connectGarmin note); loadToken() below is what authenticates.
+  const client = new GarminConnect({ username: "", password: "" });
   client.loadToken(tokens.oauth1, tokens.oauth2);
   return client;
 }
