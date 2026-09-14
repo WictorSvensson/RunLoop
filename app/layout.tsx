@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
@@ -31,7 +32,11 @@ export const metadata: Metadata = {
 // cookie can never render app content chromeless.
 export const dynamic = "force-dynamic";
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const user = await getCurrentUser();
 
   if (!user) {
