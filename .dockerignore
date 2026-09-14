@@ -1,0 +1,23 @@
+# Keep the production image lean and secret-free.
+.next/
+node_modules/
+out/
+coverage/
+
+# Secrets and local state — provided on the server via /opt/runloop/.env.
+.env*
+
+# Repo metadata and dev-only code (prototype stays in git, just not shipped).
+.git/
+.github/
+prototype/
+prisma/migrations/*.sql.shadowdb*
+
+# Tests ship no runtime value; the image runs `node server.js` only.
+# (`*` does not cross `/`, so `**/` is required for nested test files.)
+**/*.test.ts
+**/*.test.tsx
+vitest.config.ts
+
+# Regenerated in the builder via `prisma generate`; never ship a stale copy.
+/generated/

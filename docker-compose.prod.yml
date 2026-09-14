@@ -1,0 +1,50 @@
+# RunLoop production stack for the Proxmox LXC host (CT 102).
+#
+# Layout on the server:
+#   /opt/runloop/            <- git clone of this repo (deploy job pulls here)
+#   /opt/runloop/.env        <- secrets, chmod 600, NEVER committed
+#   docker-compose.prod.yml  <- this file (from the repo)
+#
+# Run from /opt/runloop so compose auto-loads .env for BOTH interpolation
+# below and the app's env_file. Required keys in .env:
+#   POSTGRES_PASSWORD, SESSION_SECRET, JOB_SECRET,
+#   FOUNDRY_ENDPOINT, FOUNDRY_API_KEY, FOUNDRY_DEPLOYMENT, GARMIN_USERNAME
+# NOTE: a DATABASE_URL in .env is ignored — the internal service URL below wins.
+#
+# Deploy:  TAG=<sha|latest> docker compose -f docker-compose.prod.yml up -d
+# Rollback: re-run with the previous TAG.
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: runloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in /opt/runloop/.env}
+      POSTGRES_DB: runloop
+    volumes:
+      - runloop-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runloop -d runloop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ghcr.io/kevincutts/runloop:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - /opt/runloop/.env
+    environment:
+      # Internal Docker-network URL. Overrides any DATABASE_URL in .env.
+      DATABASE_URL: postgresql://runloop:${POSTGRES_PASSWORD:?}@postgres:5432/runloop?schema=public
+      PORT: "3000"
+    # Loopback only — public access is via `tailscale serve --https=443`.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  runloop-pgdata:

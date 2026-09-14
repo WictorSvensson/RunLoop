@@ -1,0 +1,32 @@
+# CI: typecheck, lint, tests, production build on every push to main and all PRs.
+# Action versions verified 2026-09-14 (see skill github-actions-versions):
+#   actions/checkout v7, actions/setup-node v7.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npx vitest run
+      - run: npx next build
+        env:
+          # lib/prisma.ts throws at import time without a URL; the dummy is
+          # never used to connect (all pages are force-dynamic).
+          DATABASE_URL: postgresql://build:build@localhost:5432/build?schema=public
