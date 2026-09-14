@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
-import { enrichActivity } from "@/lib/strava/enrich";
-import { StravaApiError } from "@/lib/strava/client";
+import { getCurrentUser } from "@/lib/current-user";
+import { getActivityDetail } from "@/lib/activity-detail";
 import { isInternalRequestAuthorized } from "@/lib/http-auth";
 
 // GET /api/activities/[id]
-// Returns the detailed representation of one activity, fetching it from Strava
-// on first request and caching it in the DB (fetch-once). Same-origin protected.
+// Returns the detailed representation of one activity (stored laps included).
+// Detail is stored at import time for every source, so this is a pure DB
+// read. Same-origin protected.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -18,30 +18,13 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const user = await getOrCreateCurrentUser();
-    const activity = await enrichActivity(user.id, id);
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
+    const activity = await getActivityDetail(user.id, id);
     return NextResponse.json({ activity });
   } catch (err) {
-    if (err instanceof StravaApiError) {
-      if (err.status === 429) {
-        return NextResponse.json(
-          { error: "Strava rate limit reached. Please try again in a few minutes." },
-          { status: 429 },
-        );
-      }
-      if (err.status === 400 || err.status === 401) {
-        return NextResponse.json(
-          { error: "Your Strava connection expired. Please reconnect." },
-          { status: 401 },
-        );
-      }
-      if (err.status === 404) {
-        return NextResponse.json(
-          { error: "This activity no longer exists on Strava." },
-          { status: 404 },
-        );
-      }
-    }
     if (err instanceof Error && err.message === "Activity not found") {
       return NextResponse.json({ error: "Activity not found." }, { status: 404 });
     }

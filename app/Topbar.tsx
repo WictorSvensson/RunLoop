@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./nav-items";
 import { BrandMark } from "./Brand";
+import { LogoutButton } from "./components/LogoutButton";
 
 type Props = {
-  user: { email: string };
+  user: { username: string; displayName: string | null };
 };
 
 // Client component: breadcrumb label is derived from the current route via
@@ -16,7 +17,8 @@ export function Topbar({ user }: Props) {
   const pathname = usePathname();
   const activeLabel =
     NAV_ITEMS.find((item) => item.href === pathname)?.label ?? "Dashboard";
-  const avatarInitial = user.email.charAt(0).toUpperCase();
+  const displayName = user.displayName ?? user.username;
+  const avatarInitial = displayName.charAt(0).toUpperCase();
 
   return (
     <header className="topbar">
@@ -32,6 +34,7 @@ export function Topbar({ user }: Props) {
         <button className="icon-button" aria-label="Notifications" type="button">
           ♧<span className="notification-dot" />
         </button>
+        <LogoutButton />
         <div className="top-avatar">{avatarInitial}</div>
       </div>
     </header>

@@ -19,7 +19,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prisma } from "@/lib/prisma";
-import { extractZip } from "./zip";
+import { extractZip } from "@/lib/zip";
 
 // Single-file download cap: a corrupt/huge response must fail loudly, not OOM.
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { ActivityDTO } from "@/lib/strava/enrich";
+import type { ActivityDTO } from "@/lib/activity-detail";
 import {
   formatDistance,
   formatDuration,
@@ -87,7 +87,7 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
 
       {open && (
         <div className="activity-panel" id={panelId} role="region">
-          {loading && <p className="subtle">Loading details from Strava…</p>}
+          {loading && <p className="subtle">Loading details…</p>}
           {error && <p className="subtle activity-panel-error">{error}</p>}
           {detail && !loading && <ActivityDetailPanel detail={detail} />}
         </div>

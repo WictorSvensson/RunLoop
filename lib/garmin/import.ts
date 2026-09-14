@@ -1,7 +1,7 @@
 // Garmin activity import into the reused Activity table.
-// Mirrors lib/strava/import.ts structure: paginated full-history backfill by
-// default (Garmin cloud holds everything, unlike the Suunto manual export),
-// incremental high-water-mark sync afterwards. Every activity gets its
+// Paginated full-history backfill by default (Garmin cloud holds everything,
+// unlike the Suunto manual export), incremental high-water-mark sync
+// afterwards. Every activity gets its
 // original FIT downloaded and merged — FIT is the device record, so the
 // shared merge (scripts/import-suunto/fit.ts) fills distance/HR/cadence/
 // power/calories/laps wherever the list summary is thin.
@@ -36,9 +36,9 @@ export interface GarminImportResult {
 
 const PAGE_SIZE = 100;
 
-// Safety cap so a runaway loop can never hammer the API past sane limits
-// (mirrors the Strava importer's MAX_PAGES). 50 pages × 100 = 5000
-// activities per run; resume by re-running (upserts make it idempotent).
+// Safety cap so a runaway loop can never hammer the API past sane limits.
+// 50 pages × 100 = 5000 activities per run; resume by re-running (upserts
+// make it idempotent).
 const MAX_PAGES = 50;
 
 export const GARMIN_SOURCE = "GARMIN";
@@ -189,7 +189,7 @@ async function importOne(
 
   const activity = await prisma.activity.upsert({
     where: { userId_source_externalId: { userId, source: GARMIN_SOURCE, externalId: mapped.externalId } },
-    create: { userId, stravaId: null, source: GARMIN_SOURCE, externalId: mapped.externalId, ...data },
+    create: { userId, source: GARMIN_SOURCE, externalId: mapped.externalId, ...data },
     // A FIT-less re-run must not unmark a previously ready row: undefined
     // fields are left untouched by Prisma.
     update: analysisReady ? data : { ...data, analysisDataFetchedAt: undefined },
@@ -280,8 +280,7 @@ export async function importGarminActivities(
     }
 
     // Incremental: newest-first pages, stopping past a 1-day overlap before
-    // the high-water mark (catches backdated edits like the Strava import
-    // does). Paginates — not just the first page — so a fresh user (no
+    // the high-water mark (catches backdated edits). Paginates — not just the first page — so a fresh user (no
     // high-water mark yet) imports everything, not just the newest 100.
     const latest = await prisma.activity.findFirst({
       where: { userId, source: GARMIN_SOURCE },

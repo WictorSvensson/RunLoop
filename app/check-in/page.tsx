@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import {
   isFutureDateKey,
   parseDateKey,
@@ -58,7 +59,8 @@ export default async function CheckInPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  const user = await getOrCreateCurrentUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const now = new Date();
   const todayKey = toDateKeyUTC(now);
   // Pinned to UTC to match todayKey (date keys are UTC calendar days) — a

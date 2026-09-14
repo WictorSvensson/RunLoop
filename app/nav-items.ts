@@ -8,4 +8,5 @@ export const NAV_ITEMS = [
   { label: "Training", href: "/training", icon: "◒" },
   { label: "Analytics", href: "/analytics", icon: "◌" },
   { label: "Coach", href: "/coach", icon: "◈" },
+  { label: "Profile", href: "/profile", icon: "⚙" },
 ] as const;

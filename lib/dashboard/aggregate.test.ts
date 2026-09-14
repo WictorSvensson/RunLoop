@@ -26,8 +26,7 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
   return {
     id: `activity-${idCounter}`,
     userId: "user-1",
-    stravaId: BigInt(idCounter),
-    source: "STRAVA",
+    source: "GARMIN",
     externalId: String(idCounter),
     name: null,
     type: "Run",

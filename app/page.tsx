@@ -1,14 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
-import { toActivityDTO } from "@/lib/strava/enrich";
+import { getCurrentUser } from "@/lib/current-user";
+import { toActivityDTO } from "@/lib/activity-detail";
 import {
   formatDistance,
   formatDuration,
   formatPace,
   formatDate,
   toneFor,
-  displayNameFromEmail,
 } from "@/lib/format";
 import {
   bucketWeeklyVolume,
@@ -62,7 +62,8 @@ function greetingForHour(hour: number): string {
 }
 
 export default async function Home() {
-  const user = await getOrCreateCurrentUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const now = new Date();
   // Aligned to the same Monday-UTC week boundary bucketWeeklyVolume uses, so
@@ -118,7 +119,7 @@ export default async function Home() {
             })}
           </p>
           <h1>
-            {greetingForHour(now.getHours())}, {displayNameFromEmail(user.email)}
+            {greetingForHour(now.getHours())}, {user.displayName ?? user.username}
             <span className="accent-dot">.</span>
           </h1>
           <p className="subtle">
@@ -301,8 +302,8 @@ export default async function Home() {
           <div className="activity-list">
             {recentActivities.length === 0 ? (
               <p className="subtle">
-                No activities yet. Connect Strava on the Training page to
-                import your runs.
+                No activities yet. Connect Garmin or upload Suunto history on
+                the Profile page to import your runs.
               </p>
             ) : (
               recentActivities.map((activity) => {

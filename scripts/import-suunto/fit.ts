@@ -4,7 +4,7 @@
 // over big-endian definitions and conditional dev-data flags).
 //
 // Role: FILL GAPS ONLY. GPX remains the source of truth for track, pace,
-// HR and elevation (validated to 1 m against Strava). FIT contributes what
+// HR and elevation. FIT contributes what
 // GPX cannot: true treadmill/pool distances, cadence + power streams,
 // calories, and lap/interval structure.
 //

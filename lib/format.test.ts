@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatDistance, formatHr, formatPace, formatPaceFromSecPerKm } from "@/lib/format";
 
-// The lap-split table (ActivityList) renders nullable Strava lap fields
+// The lap-split table (ActivityList) renders nullable provider lap fields
 // directly through these helpers. A null/zero slipping through as "NaN",
 // a crash, or an empty cell would silently corrupt the panel, so the "—"
 // fallbacks are load-bearing and pinned here.
@@ -12,7 +12,7 @@ describe("format helpers null-safety (lap table contract)", () => {
     expect(formatPaceFromSecPerKm(null)).toBe("—");
   });
 
-  it("renders an em dash for non-positive pace values Strava sometimes sends", () => {
+  it("renders an em dash for non-positive pace values providers sometimes send", () => {
     // 0/negative speeds would otherwise divide into Infinity/negative output.
     expect(formatPace(0)).toBe("—");
     expect(formatPace(-2.5)).toBe("—");

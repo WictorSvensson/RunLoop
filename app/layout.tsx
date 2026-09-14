@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import "./globals.css";
@@ -24,13 +24,26 @@ export const metadata: Metadata = {
   },
 };
 
-// Renders the shared sidebar/topbar chrome for every route in the app.
-// Reads live DB state (current user, today's check-in — used for the nav
-// reminder dot), so the whole app must not be statically prerendered.
+// Renders the shared sidebar/topbar chrome for every authenticated route.
+// Logged-out visitors (the /login page — middleware keeps them out of every
+// other route) get bare children with no chrome. Protected pages redirect to
+// /login themselves when the session is missing or invalid, so an invalid
+// cookie can never render app content chromeless.
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const user = await getOrCreateCurrentUser();
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return (
+      <html
+        lang="en"
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col">{children}</body>
+      </html>
+    );
+  }
 
   const now = new Date();
   const today = new Date(

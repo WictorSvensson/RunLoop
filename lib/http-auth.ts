@@ -3,15 +3,20 @@ import { timingSafeEqual } from "crypto";
 
 // Shared authorization for triggerable/internal API routes.
 //
-// Until real per-user auth lands, routes are protected by EITHER:
+// Routes are protected by EITHER:
 //   1. A bearer secret (for automated/external callers like cron), compared in
 //      constant time. The secret name is configurable per route.
 //   2. A same-origin browser request from our own UI. We require the browser-set
 //      `Sec-Fetch-Site: same-origin` header (which cross-site JS cannot forge)
 //      AND a matching Origin host. Non-browser callers can't satisfy this.
 //
-// NOTE: this is not a hard per-user boundary yet; treat the bearer secret as the
-// real protection for anything internet-facing.
+// NOTE: this gate authenticates the *caller*, not the *user*. Per-user job
+// routes (garmin import, analysis jobs, activity detail) additionally
+// require a session cookie (`getCurrentUser()`), because a bearer secret alone
+// cannot identify whose data to sync. Pure-cron callers with only JOB_SECRET
+// get a 401 on those routes by design — browser "Sync now" clicks send the
+// session cookie and work. Treat the bearer secret as the real protection for
+// anything internet-facing.
 export function isInternalRequestAuthorized(
   request: NextRequest,
   options: { secretEnvVar?: string } = {},

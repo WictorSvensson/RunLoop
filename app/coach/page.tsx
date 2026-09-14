@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
-import { getAnalysisCoverage } from "@/lib/strava/analysis-data";
+import { getCurrentUser } from "@/lib/current-user";
+import { getAnalysisCoverage } from "@/lib/activity-detail";
 import { getCoachFacts } from "@/lib/coach/facts";
 import { GenerateButton } from "./GenerateButton";
 
@@ -20,7 +21,8 @@ function formatBriefDate(date: Date): string {
 }
 
 export default async function CoachPage() {
-  const user = await getOrCreateCurrentUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const [facts, latestBrief, coverage] = await Promise.all([
     getCoachFacts(user.id),

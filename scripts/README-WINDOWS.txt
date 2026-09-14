@@ -48,6 +48,9 @@ Done! You are running the app.
 
 CONNECT YOUR STRAVA (OPTIONAL)
 ------------------------------
+NOTE: the Strava integration was removed from the app — the section below
+is kept for history only. Connect Garmin or upload a Suunto export from
+the Profile page instead.
 
 Do this if you want your runs to show up in the app automatically.
 It takes about 2 minutes. You only do it once.

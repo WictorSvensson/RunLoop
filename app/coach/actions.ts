@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { getCoachFacts } from "@/lib/coach/facts";
 import { BriefGenerationError, generateAndSaveBrief } from "@/lib/coach/generate";
 
@@ -20,7 +20,10 @@ export interface GenerateActionState {
 // click stores a new audit row; newest wins for display.
 export async function generateCoachBrief(): Promise<GenerateActionState> {
   try {
-    const user = await getOrCreateCurrentUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return { ok: false, message: "Your session expired. Please log in again." };
+    }
     const latest = await prisma.coachBrief.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },

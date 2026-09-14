@@ -1,6 +1,5 @@
-// N-way duplicate detection across activity sources (STRAVA / SUUNTO /
-// GARMIN). Extracted from the two copy-pasted guards (Suunto importer SQL,
-// Strava import) so a third importer can't introduce a third divergent copy.
+// N-way duplicate detection across activity sources (SUUNTO / GARMIN).
+// Shared twin test so importers can't introduce divergent copies.
 // Rule: same ±10 min start window AND comparable elapsed time (±5 min).
 // Type labels are NOT compared — providers disagree (treadmill→VirtualRun vs
 // Run, roller_skating→InlineSkate vs NordicSki). Null elapsed on either side

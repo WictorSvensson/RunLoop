@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { connectGarmin, saveGarminTokens, GarminAuthError } from "@/lib/garmin/client";
 import { isInternalRequestAuthorized } from "@/lib/http-auth";
 
@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const user = await getOrCreateCurrentUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
     const { tokens, garminUserId, displayName } = await connectGarmin(username, password);
     await saveGarminTokens(user.id, tokens, { garminUserId, username });
     return NextResponse.json({ ok: true, displayName });

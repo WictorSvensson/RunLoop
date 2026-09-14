@@ -12,13 +12,20 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  // Canonical lowercase username (e.g. "wictor"). Logins are matched
+  // case-insensitively by lowercasing input before lookup.
+  username     String   @unique
+  // scrypt password hash ("saltHex:hashHex"). Never store plaintext.
+  passwordHash String
+  displayName  String?
+  email        String?  @unique
+  weightKg     Float?
+  timezone     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   dailyCheckins    DailyCheckin[]
-  stravaConnection StravaConnection?
   garminConnection GarminConnection?
   activities       Activity[]
   coachBriefs      CoachBrief[]
@@ -42,23 +49,6 @@ model CoachBrief {
   @@index([userId, createdAt])
 }
 
-// Stores a user's Strava OAuth tokens. One connection per user.
-// Access tokens are short-lived (~6h); the refresh token is used to mint new
-// ones and CAN change on each refresh, so we always persist the latest values.
-model StravaConnection {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  athleteId      BigInt // Strava athlete id
-  accessToken    String
-  refreshToken   String
-  expiresAt      DateTime // when the access token expires
-  scope          String? // space/comma-delimited scopes granted
-  lastSyncedAt   DateTime? // last successful activity import
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
 // Stores a user's Garmin Connect tokens (unofficial API). One connection per
 // user. The Garmin password is NEVER stored — it is used once at connect
 // time to obtain tokens, and only the exported token pair below persists.
@@ -76,20 +66,19 @@ model GarminConnection {
   updatedAt      DateTime  @updatedAt
 }
 
-// A training activity imported from Strava or Suunto. Only the objective
+// A training activity imported from Garmin or Suunto. Only the objective
 // fields the source provides are mapped here; subjective fields (RPE, shoes,
 // symptoms) stay manual. `source` + `externalId` is the dedup key across
-// providers: Strava rows use externalId = String(stravaId), Suunto rows use
+// providers: Garmin rows use the activity id, Suunto rows use
 // the export filename stem (e.g. "2023-05-02_17.15.12-running").
 model Activity {
   id                 String    @id @default(cuid())
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stravaId           BigInt? // Strava activity id (null for non-Strava rows)
-  source             String    @default("STRAVA") // "STRAVA" | "SUUNTO" | "GARMIN"
+  source             String    @default("GARMIN") // "SUUNTO" | "GARMIN"
   externalId         String // provider-stable id for idempotent re-imports (required: NULLs bypass unique enforcement)
   name               String?
-  type               String? // Strava sport_type, e.g. "Run", "TrailRun"
+  type               String? // provider sport type, e.g. "Run", "TrailRun"
   startDate          DateTime // activity start (UTC)
   distance           Float? // meters
   movingTime         Int? // seconds
@@ -156,7 +145,7 @@ model ActivityLap {
   @@index([activityId])
 }
 
-// Raw Strava streams are intentionally stored as one JSON document per activity
+// Raw provider streams are intentionally stored as one JSON document per activity
 // for the first analysis prototype. This keeps ingestion lossless while the
 // segment/classification model is still evolving. We can normalize later once
 // query patterns are proven.

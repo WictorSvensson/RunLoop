@@ -7,7 +7,7 @@
 //
 // Idempotent: Activity rows upsert on (userId, source, externalId) and
 // DailyCheckin rows only fill empty sleep fields, so re-running after a new
-// manual export imports just the new files. Never touches source=STRAVA rows.
+// manual export imports just the new files.
 //
 // Plain Node + `pg` (already a dependency) by design — Node strips types
 // natively, so no tsx/ts-node is needed. Keep this file free of non-erasable
@@ -300,17 +300,6 @@ async function main(): Promise<void> {
     const nowIso = new Date().toISOString();
     for (const row of pending) {
       const s = row.summary;
-      // Same workout already synced via Strava (Suunto->Strava auto-sync):
-      const dup = await client.query(
-        `SELECT id FROM "Activity" WHERE "userId" = $1 AND source = 'STRAVA'
-         AND ABS(EXTRACT(EPOCH FROM ("startDate" - $2))) < 600
-         AND ABS(COALESCE("elapsedTime", 0) - $3) <= 300 LIMIT 1`,
-        [userId, row.startDateIso, s.elapsedTime],
-      );
-      if (dup.rowCount !== 0) {
-        stats.duplicates++;
-        continue;
-      }
       stats.byType[row.type] = (stats.byType[row.type] ?? 0) + 1;
       // Activity + stream commit atomically: analysisDataFetchedAt claims
       // "streams stored", so the two must never diverge on a crash mid-row.
@@ -324,13 +313,13 @@ async function main(): Promise<void> {
         if (existing.rowCount === 0) {
           const inserted = await client.query(
             `INSERT INTO "Activity"
-               (id, "userId", "stravaId", source, "externalId", name, type, "startDate",
+               (id, "userId", source, "externalId", name, type, "startDate",
                 distance, "movingTime", "elapsedTime", "averageSpeed", "maxSpeed",
                 "averageHeartrate", "maxHeartrate", "totalElevationGain",
                 "averageCadence", "averageWatts", "maxWatts", calories,
                 "startDateLocal", timezone, "deviceName",
                 "detailFetchedAt", "analysisDataFetchedAt", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid(), $1, NULL, 'SUUNTO', $2, $3, $4, $5,
+             VALUES (gen_random_uuid(), $1, 'SUUNTO', $2, $3, $4, $5,
                 $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
                 NULL, $18, $19, $20, $20, $20, $20)
              RETURNING id`,

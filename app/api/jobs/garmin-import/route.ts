@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { importGarminActivities } from "@/lib/garmin/import";
 import { importGarminHealth } from "@/lib/garmin/health";
 import { GarminAuthError } from "@/lib/garmin/client";
@@ -8,7 +8,7 @@ import { isInternalRequestAuthorized } from "@/lib/http-auth";
 // POST /api/jobs/garmin-import
 // Triggerable Garmin sync: activities (incremental by default, ?full=1 for
 // whole history) plus recent health (?healthDays=N, default 14; ?full=1
-// raises it to 365). Same auth as the Strava job: Bearer JOB_SECRET or
+// raises it to 365). Same auth as other job routes: Bearer JOB_SECRET or
 // same-origin browser request.
 export async function POST(request: NextRequest) {
   if (!isInternalRequestAuthorized(request)) {
@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
       : 14;
 
   try {
-    const user = await getOrCreateCurrentUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
     const activities = await importGarminActivities(user.id, { fullResync, maxActivities: maxActivities ?? undefined });
     const health =
       maxActivities !== null

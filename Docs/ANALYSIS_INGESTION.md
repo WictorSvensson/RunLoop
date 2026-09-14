@@ -1,5 +1,11 @@
 # RunLoop analysis ingestion
 
+> Historical note: the Strava integration (import, OAuth, per-activity
+> hydration jobs) was removed — Garmin and Suunto rows arrive with laps +
+> streams stored at import time, so no hydration step exists anymore. The
+> `/api/jobs/analysis-hydrate` and `/api/jobs/analysis-coverage` endpoints
+> referenced below are gone.
+
 This layer does **not** train an LLM or claim to infer fitness yet. It adds the
 historical data layer needed before workout classification and comparable-session
 analysis can be trustworthy.

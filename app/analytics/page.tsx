@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { formatPaceFromSecPerKm } from "@/lib/format";
 import {
   bucketWeeklyVolume,
@@ -18,7 +19,8 @@ export const dynamic = "force-dynamic";
 const WEEK_COUNT = 12;
 
 export default async function AnalyticsPage() {
-  const user = await getOrCreateCurrentUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const now = new Date();
   // Same Monday-UTC alignment as the Dashboard's window, so the query and the

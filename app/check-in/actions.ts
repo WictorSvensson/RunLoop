@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import {
   SEVERITIES,
   SLEEP_QUALITIES,
@@ -126,7 +126,15 @@ export async function upsertDailyCheckin(
   }
 
   try {
-    const user = await getOrCreateCurrentUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return {
+        ok: false,
+        message: "Your session expired. Please log in again.",
+        errors: {},
+        savedDateKey: null,
+      };
+    }
     const date = dateKeyToUTCDate(values.dateKey);
 
     await prisma.dailyCheckin.upsert({
