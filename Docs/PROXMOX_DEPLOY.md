@@ -86,9 +86,9 @@ tailscale serve --bg --https=443 http://127.0.0.1:3000
 adduser actions && usermod -aG docker actions
 su - actions
 mkdir -p ~/actions-runner && cd ~/actions-runner
-# GitHub -> kevincutts/RunLoop -> Settings -> Actions -> Runners ->
+# GitHub -> WictorSvensson/RunLoop -> Settings -> Actions -> Runners ->
 # New self-hosted runner (Linux x64), labels: runloop-prod, name: runloop-prod-ct
-./config.sh --url https://github.com/kevincutts/RunLoop --token <token> \
+./config.sh --url https://github.com/WictorSvensson/RunLoop --token <token> \
   --labels runloop-prod --name runloop-prod-ct
 sudo ./svc.sh install && sudo ./svc.sh start
 ```
@@ -133,7 +133,7 @@ Notes:
 ## 7. Deploy / update / rollback
 
 - GitHub → Actions → **Deploy** → Run workflow (`ref` defaults to `main`).
-  Build pushes `ghcr.io/kevincutts/runloop:latest` + `:sha-<short>`; the runner
+  Build pushes `ghcr.io/wictorsvensson/runloop:latest` + `:sha-<short>`; the runner
   pulls and restarts; entrypoint runs `prisma migrate deploy` before serving.
 - Healthcheck hits `http://127.0.0.1:3000/login` for ~150s; on failure the job
   prints the last 50 app log lines and exits non-zero.

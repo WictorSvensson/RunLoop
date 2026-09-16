@@ -31,7 +31,7 @@ services:
       retries: 10
 
   app:
-    image: ghcr.io/kevincutts/runloop:${TAG:-latest}
+    image: ghcr.io/wictorsvensson/runloop:${TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

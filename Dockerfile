@@ -1,6 +1,6 @@
 # RunLoop production image: Next.js standalone + Prisma migrate-on-boot.
 #
-# Build:   docker build -t ghcr.io/kevincutts/runloop:local .
+# Build:   docker build -t ghcr.io/wictorsvensson/runloop:local .
 # Run:     via docker-compose.prod.yml on the Proxmox LXC host (never `docker run`
 #          bare — Postgres, secrets and migration ordering live in compose).
 #
