@@ -25,10 +25,28 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  dailyCheckins    DailyCheckin[]
-  garminConnection GarminConnection?
-  activities       Activity[]
-  coachBriefs      CoachBrief[]
+  dailyCheckins       DailyCheckin[]
+  garminConnection    GarminConnection?
+  activities          Activity[]
+  coachBriefs         CoachBrief[]
+  integrationSettings IntegrationSetting[]
+}
+
+// Per-user on/off switch for each training-data integration ("GARMIN" |
+// "SUUNTO"; plain String so future sources need no schema change). Absence
+// of a row means enabled — existing users keep working with zero backfill.
+// OFF blocks future syncs/uploads but never deletes tokens or activities.
+model IntegrationSetting {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source    String // "GARMIN" | "SUUNTO" (extensible: COROS/Strava later)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source])
+  @@index([userId])
 }
 
 // One LLM-generated coaching brief per generation click. Every row stores the

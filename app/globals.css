@@ -56,11 +56,10 @@
 .generate-success { color: #3e6b5e; font: 11px 'DM Mono', monospace; margin: 0; }
 .app-shell .generate-success { color: #8fc4b4; }
 .app-shell .insight-body a { color: #8fc4b4; }
-.connection-row .sync-controls { text-align: right; }
-.connection-row .sync-controls .subtle { margin: 0 0 8px; }
-.connection-row .sync-message { margin: 8px 0 0; }
-.connection-row .sync-controls form input { display: block; width: 100%; border: 1px solid #d5dbd2; border-radius: 3px; background: #f8f9f5; padding: 10px 12px; margin: 0 0 8px; color: var(--ink); font-size: 13px; }
-.app-shell .connection-row .sync-controls form input { background: #171c1a; border-color: #36423d; color: #f4f2e9; }
+.connection-actions .sync-controls .subtle { margin: 0 0 8px; }
+.connection-actions .sync-message { margin: 8px 0 0; }
+.connection-actions .sync-controls form input { display: block; width: 100%; border: 1px solid #d5dbd2; border-radius: 3px; background: #f8f9f5; padding: 10px 12px; margin: 0 0 8px; color: var(--ink); font-size: 13px; }
+.app-shell .connection-actions .sync-controls form input { background: #171c1a; border-color: #36423d; color: #f4f2e9; }
 
 .training-status { color: var(--teal); font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; margin: 9px 0 0; text-transform: uppercase; }
 .training-status span { color: #9aa9a0; margin: 0 5px; }
@@ -397,17 +396,53 @@
 .app-shell .connection-row span { color: #77847d; }
 @media (max-width: 700px) { .login-card { padding: 30px 24px; } .connection-row { align-items: flex-start; flex-direction: column; } .connection-row .connection-button { width: 100%; text-align: center; } }
 
-/* Suunto zip upload on the profile page. */
-.suunto-upload .connection-row { border-bottom: 0; padding-bottom: 6px; }
+/* Integration toggles + controls on the profile page. Each connection is one
+   row: name + description left, toggle with its action buttons stacked
+   right. */
+.connection-row { align-items: flex-start; }
+.connection-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
+.connection-actions .sync-controls { text-align: right; }
+.connection-actions .sync-controls form { min-width: 230px; }
+.integration-toggle-wrap { display: inline-flex; align-items: center; gap: 8px; }
+.integration-toggle { position: relative; width: 44px; height: 24px; border-radius: 999px; border: 1px solid #c9cfc8; background: #dfe4dd; padding: 0; transition: background .15s ease, border-color .15s ease; flex-shrink: 0; }
+.integration-toggle-knob { position: absolute; top: 50%; left: 3px; display: block; width: 18px; height: 18px; margin: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transform: translateY(-50%); transition: transform .15s ease; }
+/* Wins over `.connection-row span` (0,1,1): the knob is a span inside the
+   row, and that rule's margin-top would otherwise push it 5px too low. */
+.integration-toggle .integration-toggle-knob { margin-top: 0; }
+.integration-toggle.is-on { background: #4f766c; border-color: #4f766c; }
+.integration-toggle.is-on .integration-toggle-knob { transform: translateY(-50%) translateX(18px); }
+.integration-toggle:disabled { opacity: .55; cursor: not-allowed; }
+.integration-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.integration-toggle-error { color: #a5603f; font: 10px 'DM Mono', monospace; }
+.app-shell .integration-toggle { background: #36423d; border-color: #53615b; }
+.app-shell .integration-toggle.is-on { background: #76a99c; border-color: #76a99c; }
+.app-shell .integration-toggle-knob { background: #f4f2e9; }
+.app-shell .integration-toggle-error { color: #e0a27e; }
+.sync-controls .checkin-button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Suunto zip upload on the profile page. Lives in the row's right column,
+   so it stacks right-aligned with the toggle above it. */
+.suunto-upload { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; text-align: right; }
 .suunto-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .suunto-pick { cursor: pointer; }
-.suunto-file-name { color: var(--muted); font: 11px 'DM Mono', monospace; margin: 8px 0 0; }
-.suunto-actions { margin-top: 12px; }
+.suunto-file-name { color: var(--muted); font: 11px 'DM Mono', monospace; margin: 0; }
+.suunto-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 0; }
 .suunto-actions .checkin-button:disabled { opacity: .5; cursor: not-allowed; }
-.suunto-status { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+.suunto-status { color: var(--muted); font-size: 12px; margin: 0; }
 .suunto-error { color: #a5603f; }
 .suunto-ok { color: #3e6b5e; }
 .app-shell .suunto-file-name { color: #77847d; }
 .app-shell .suunto-status { color: #9ca69f; }
 .app-shell .suunto-error { color: #e0a27e; }
 .app-shell .suunto-ok { color: #8fc4b4; }
+
+/* Narrow screens: the row stacks, so the right column goes full-width and
+   left-aligns. Extra `.connection-list` scoping wins over the later base
+   rules regardless of source order. */
+@media (max-width: 700px) {
+  .connection-list .connection-actions { align-items: flex-start; width: 100%; }
+  .connection-list .connection-actions .sync-controls { text-align: left; }
+  .connection-list .connection-actions .sync-controls form { min-width: 0; }
+  .connection-list .suunto-upload { align-items: flex-start; text-align: left; }
+  .connection-list .suunto-actions { justify-content: flex-start; }
+}

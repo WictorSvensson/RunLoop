@@ -20,6 +20,8 @@ type Status =
 // Parsing + import run server-side (/api/suunto/upload); this component only
 // collects the file and reports the summary. Re-uploads are idempotent
 // (upsert on filename stem), so topping up later with a fresh export is safe.
+// Rendered only while the Suunto toggle is on (the parent hides this whole
+// block when off); the server also rejects uploads with a 403 when off.
 export function SuuntoUpload() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -63,15 +65,6 @@ export function SuuntoUpload() {
 
   return (
     <div className="suunto-upload">
-      <div className="connection-row">
-        <div>
-          <strong>Suunto</strong>
-          <span>Upload your history export (.zip from the Suunto app).</span>
-        </div>
-        <label className="checkin-button connection-button suunto-pick" htmlFor="suunto-zip">
-          Choose file
-        </label>
-      </div>
       <input
         ref={fileRef}
         id="suunto-zip"
@@ -85,6 +78,9 @@ export function SuuntoUpload() {
       />
       {fileName && <p className="suunto-file-name">{fileName}</p>}
       <div className="suunto-actions">
+        <label className="checkin-button connection-button suunto-pick" htmlFor="suunto-zip">
+          Choose file
+        </label>
         <button
           className="checkin-button"
           type="button"

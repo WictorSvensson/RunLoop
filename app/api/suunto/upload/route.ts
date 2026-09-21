@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { getCurrentUser } from "@/lib/current-user";
+import { isIntegrationEnabled } from "@/lib/integrations";
 import { extractZip } from "@/lib/zip";
 import { normalizeExportPaths, qualityToSleepQuality } from "@/lib/suunto-files";
 import {
@@ -78,6 +79,13 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+  // Toggled-off integrations keep history but block future uploads.
+  if (!(await isIntegrationEnabled(user.id, "SUUNTO"))) {
+    return NextResponse.json(
+      { error: "Suunto uploads are turned off. Toggle Suunto on in Profile to import." },
+      { status: 403 },
+    );
   }
 
   let form: FormData;

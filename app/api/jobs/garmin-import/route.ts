@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { importGarminActivities } from "@/lib/garmin/import";
 import { importGarminHealth } from "@/lib/garmin/health";
 import { GarminAuthError } from "@/lib/garmin/client";
+import { isIntegrationEnabled } from "@/lib/integrations";
 import { isInternalRequestAuthorized } from "@/lib/http-auth";
 
 // POST /api/jobs/garmin-import
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
+    // Toggled-off integrations keep tokens + history but block future syncs.
+    if (!(await isIntegrationEnabled(user.id, "GARMIN"))) {
+      return NextResponse.json(
+        { error: "Garmin sync is turned off. Toggle it on in Profile to sync." },
+        { status: 403 },
+      );
     }
     const activities = await importGarminActivities(user.id, { fullResync, maxActivities: maxActivities ?? undefined });
     const health =

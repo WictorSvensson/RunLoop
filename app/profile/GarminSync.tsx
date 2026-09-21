@@ -4,13 +4,16 @@ import { useState } from "react";
 
 interface Props {
   isConnected: boolean;
-  username?: string | null;
   defaultUsername?: string;
+  onReconnected?: () => void;
 }
 
 // Client-side controls for connecting Garmin (unofficial API) and
-// triggering an import. Rendered in the profile Connections section.
-export function GarminSync({ isConnected, username, defaultUsername }: Props) {
+// triggering an import. Rendered in the profile Connections section only
+// while the Garmin toggle is on (the parent hides this whole block when
+// off). `onReconnected` fires after a successful connect so the parent can
+// flip the toggle on (the server re-enables the integration on connect).
+export function GarminSync({ isConnected, defaultUsername, onReconnected }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [email, setEmail] = useState(defaultUsername ?? "");
@@ -33,6 +36,9 @@ export function GarminSync({ isConnected, username, defaultUsername }: Props) {
       } else {
         // Password stays in memory only — clear it the moment login succeeds.
         setPassword("");
+        // The server re-enables the integration on connect — reflect that in
+        // the toggle so sync buttons unlock without a page reload.
+        onReconnected?.();
         setMessage(
           `Garmin connected${data.displayName ? ` (${data.displayName})` : ""}. Click “Sync now” to import.`,
         );
@@ -88,7 +94,6 @@ export function GarminSync({ isConnected, username, defaultUsername }: Props) {
           >
             {syncing ? "Syncing…" : "Full Garmin resync"}
           </button>
-          {username && <p className="subtle">Connected as {username}.</p>}
         </div>
       ) : (
         <form onSubmit={handleConnect}>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { connectGarmin, saveGarminTokens, GarminAuthError } from "@/lib/garmin/client";
+import { setIntegrationEnabled } from "@/lib/integrations";
 import { isInternalRequestAuthorized } from "@/lib/http-auth";
 
 // POST /api/garmin/connect { username, password }
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
     }
     const { tokens, garminUserId, displayName } = await connectGarmin(username, password);
     await saveGarminTokens(user.id, tokens, { garminUserId, username });
+    // A fresh connect implies the user wants Garmin on — clear a previous
+    // toggle-off so sync works immediately without a second toggle click.
+    await setIntegrationEnabled(user.id, "GARMIN", true);
     return NextResponse.json({ ok: true, displayName });
   } catch (err) {
     if (err instanceof GarminAuthError) {
