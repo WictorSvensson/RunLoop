@@ -14,6 +14,7 @@ import {
   formatDate,
   toneFor,
 } from "@/lib/format";
+import { SessionProfilePanel } from "./SessionProfilePanel";
 
 // Broad-class label for the SessionProfile badge. "Unclassified" covers both
 // classification "unknown" and "insufficient" confidence — honest empty state,
@@ -165,7 +166,15 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
 
       {open && (
         <div className="activity-panel" id={panelId} role="region">
-          {loading && <p className="subtle">Loading details…</p>}
+          {loading && (
+            <div className="activity-panel-inner" aria-busy="true">
+              {/* Same shell as the loaded panel so the open row does not
+                  collapse to a one-line height and back again. */}
+              <div className="session-profile session-profile-placeholder">
+                <p className="subtle">Loading details and profiling session…</p>
+              </div>
+            </div>
+          )}
           {error && <p className="subtle activity-panel-error">{error}</p>}
           {detail && !loading && <ActivityDetailPanel detail={detail} />}
         </div>
@@ -207,6 +216,16 @@ function ActivityDetailPanel({ detail }: { detail: ActivityDTO }) {
         </div>
       ) : (
         <p className="subtle">No extra details available for this activity.</p>
+      )}
+
+      {/* What the profiler concluded and why. The full SessionProfile only
+          arrives with the detail payload; list rows carry the badge alone. */}
+      {detail.sessionProfile ? (
+        <SessionProfilePanel profile={detail.sessionProfile} />
+      ) : (
+        <div className="session-profile-placeholder">
+          <p className="subtle">Session profile unavailable for this activity.</p>
+        </div>
       )}
 
       {detail.laps !== null && detail.laps.length > 0 && (

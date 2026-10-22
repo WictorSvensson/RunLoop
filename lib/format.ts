@@ -57,12 +57,3 @@ export function toneFor(type: string | null): string {
   if (t.includes("walk") || t.includes("hike")) return "recovery";
   return "easy";
 }
-
-// Best-effort display name until real auth/profile fields exist — falls back
-// to the local part of the account email rather than a hardcoded name. Used
-// by the shared dashboard chrome (Sidebar/Topbar) as well as the Dashboard
-// page's greeting copy.
-export function displayNameFromEmail(email: string): string {
-  const local = email.split("@")[0] ?? email;
-  return local.charAt(0).toUpperCase() + local.slice(1);
-}

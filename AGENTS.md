@@ -42,13 +42,20 @@ future need it hedged against wasn't actually planned.)
 
 ## Established conventions
 
-- **Server Components fetch data directly via Prisma** in an `async function Page()` — no client-side fetching for initial page data. Reference implementations: `app/training/page.tsx`, `app/page.tsx`, `app/analytics/page.tsx`. Interactive bits are split into small `"use client"` components that receive server-fetched data as props (e.g. `app/training/ActivityList.tsx`, `app/CheckInModal.tsx`).
+- **Server Components fetch data directly via Prisma** in an `async function Page()` — no client-side fetching for initial page data. Reference implementations: `app/training/page.tsx`, `app/page.tsx`, `app/analytics/page.tsx`. Interactive bits are split into small `"use client"` components that receive server-fetched data as props (e.g. `app/training/ActivityList.tsx`, `app/training/SessionProfilePanel.tsx`, `app/check-in/CheckInForm.tsx`).
 - **Auth is real (username + password).** `lib/auth.ts` holds scrypt hashing and the signed `runloop_session` cookie (`SESSION_SECRET`); `lib/current-user.ts`'s cached `getCurrentUser()` returns `null` when logged out. `middleware.ts` redirects logged-out visitors to `/login` (the layout renders bare children for them); every protected page redirects and every API route 401s on `null`. Always scope Prisma queries by `user.id`.
 - **DTO conversion at the client boundary.** Prisma models can contain `Date` (and other non-JSON-safe shapes) which aren't serializable to Client Components. Follow `lib/activity-detail.ts`'s `toActivityDTO()` pattern for any new data shape crossing that boundary.
 - **Don't duplicate formatting/aggregation logic.** Use `lib/format.ts` (`formatDistance`, `formatDuration`, `formatPace`/`formatPaceFromSecPerKm`, `formatDate`, `toneFor`) and `lib/dashboard/aggregate.ts` (`bucketWeeklyVolume`, `computeThisWeekStats`, `computeConsistency`, `computePaceTrend`, `computeVolumeChange`, `windowStartUTC`, `startOfWeekUTC`) instead of reimplementing. These are pure functions with unit tests in `lib/dashboard/aggregate.test.ts`.
 - **Running-only filter.** `lib/running-types.ts`'s `RUNNING_TYPES` (`Run`/`TrailRun`/`VirtualRun`) is applied on Dashboard and Analytics queries — providers also sync rides/swims/etc. The Training page intentionally does NOT filter (shows full history).
 - **No fabricated precision or interpretation.** Per `Docs/RUNLOOP_ANALYSIS_ENGINE_SPEC.md` §2.4/§28: never invent "confidence" scores, "patterns", or metrics not backed by real computation (e.g. no fake "easy pace" without real workout classification). Prefer honest empty/"not enough data yet" states, and gate any earlier-vs-later comparison behind a minimum sample size (see `MIN_RUNS_PER_HALF` in `app/analytics/page.tsx`) rather than presenting a single data point as a trend.
 - Pages needing live DB state on every request must set `export const dynamic = "force-dynamic";` or Next may statically prerender them at build time with stale data (bit us on both `/` and `/analytics`).
+
+### SessionProfile (`lib/session-profile/`)
+
+- `profile.ts` — pure `sessionProfile(activity, laps, streams) -> SessionProfile`; no Prisma import, no gold-set import. Heuristic v0.1 cutoffs live at the top of the file.
+- `input.ts` — `loadSessionInputs(userId, activityId)` is the only DB-touching layer (built on `getActivityDetail`), used by the gold-set CLI. `lib/activity-detail.ts` computes the profile once per detail request and exposes it as `sessionProfile` (full) + `profile` (badge).
+- `gold-set.ts` — `compareToGoldSet()` / `summarizeGoldSet()` against the athlete's facit; the profiler must never receive the facit. Run it with `npm run profile:gold-set` (flags in `scripts/session-profile/README.md`).
+- `cost.recovery` is always `"unknown"` in v0.1 — do not wire recovery from load alone.
 
 ## CSS gotcha (important — has caused two shipped bugs)
 

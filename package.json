@@ -2,6 +2,9 @@
   "name": "my-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.15"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +18,8 @@
     "db:seed": "node scripts/seed-users.mjs",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "import:suunto": "node scripts/import-suunto/import.ts"
+    "import:suunto": "node scripts/import-suunto/import.ts",
+    "profile:gold-set": "node scripts/session-profile/gold-set.ts"
   },
   "dependencies": {
     "@flow-js/garmin-connect": "^1.6.18",

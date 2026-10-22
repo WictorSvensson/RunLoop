@@ -1,0 +1,31 @@
+[
+  {
+    "_comment": "ILLUSTRATIVE SHAPE ONLY — not a real labelled session",
+    "id": "example-easy",
+    "date": "2025-01-07",
+    "actual": "5 km even easy run, five 1 km auto-laps at the same pace",
+    "intent": "easy aerobic volume",
+    "assessment": "even throughout, no fast segments",
+    "rpe": 3,
+    "context": "flat road",
+    "fixture": "fixtures/example-easy.json",
+    "expected": {
+      "category": "easy-recovery",
+      "workRecoveryShape": "continuous steady running",
+      "intensity": "easy",
+      "execution": "even, as planned"
+    }
+  },
+  {
+    "_comment": "ILLUSTRATIVE SHAPE ONLY — not a real labelled session",
+    "id": "example-thin-data",
+    "date": "2025-01-09",
+    "actual": "a short run I barely remember; almost no usable data",
+    "intent": "unknown",
+    "assessment": "hard to interpret — memory is vague",
+    "fixture": "fixtures/example-thin-data.json",
+    "expected": {
+      "category": "unknown"
+    }
+  }
+]

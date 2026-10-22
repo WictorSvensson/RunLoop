@@ -1,0 +1,25 @@
+{
+  "_comment": "SYNTHETIC fixture — hand-made round numbers, not a real session. Exists so the gold-set harness can be demonstrated and run in CI without a database. Real dumps are produced by `node scripts/session-profile/gold-set.ts --dump <yyyy-mm-dd>`.",
+  "activity": {
+    "type": "Run",
+    "name": "synthetic easy run",
+    "description": null,
+    "distance": 5000,
+    "movingTime": 1800,
+    "elapsedTime": 1800,
+    "averageSpeed": 2.78,
+    "maxSpeed": 3.05,
+    "averageHeartrate": 138,
+    "maxHeartrate": 148,
+    "totalElevationGain": 20,
+    "averageTemp": 8
+  },
+  "laps": [
+    { "lapIndex": 0, "distance": 1000, "movingTime": 360, "elapsedTime": 360, "averageSpeed": 2.78, "averageHeartrate": 135 },
+    { "lapIndex": 1, "distance": 1000, "movingTime": 360, "elapsedTime": 360, "averageSpeed": 2.78, "averageHeartrate": 137 },
+    { "lapIndex": 2, "distance": 1000, "movingTime": 360, "elapsedTime": 360, "averageSpeed": 2.78, "averageHeartrate": 138 },
+    { "lapIndex": 3, "distance": 1000, "movingTime": 360, "elapsedTime": 360, "averageSpeed": 2.78, "averageHeartrate": 139 },
+    { "lapIndex": 4, "distance": 1000, "movingTime": 360, "elapsedTime": 360, "averageSpeed": 2.78, "averageHeartrate": 140 }
+  ],
+  "streams": null
+}

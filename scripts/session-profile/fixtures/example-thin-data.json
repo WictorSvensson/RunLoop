@@ -1,0 +1,19 @@
+{
+  "_comment": "SYNTHETIC fixture — deliberately thin data (no laps, no streams, no HR) to demonstrate an honest unknown/insufficient profile. Not a real session.",
+  "activity": {
+    "type": "Run",
+    "name": null,
+    "description": null,
+    "distance": 2000,
+    "movingTime": 900,
+    "elapsedTime": 900,
+    "averageSpeed": null,
+    "maxSpeed": null,
+    "averageHeartrate": null,
+    "maxHeartrate": null,
+    "totalElevationGain": null,
+    "averageTemp": null
+  },
+  "laps": [],
+  "streams": null
+}

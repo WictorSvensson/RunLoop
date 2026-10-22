@@ -16,7 +16,6 @@ import {
   windowStartUTC,
 } from "@/lib/dashboard/aggregate";
 import { RUNNING_TYPES } from "@/lib/running-types";
-import { CheckInModal } from "./CheckInModal";
 
 // This page reads live DB state (today's check-in, this week's activities) on
 // every load, so it must not be statically prerendered at build time.
@@ -126,7 +125,9 @@ export default async function Home() {
             Last {WEEK_COUNT} weeks of training
           </p>
         </div>
-        <CheckInModal />
+        <Link className="checkin-button" href="/check-in">
+          <span>+</span> Daily check-in
+        </Link>
       </div>
 
       <section className="week-hero training-block-panel">

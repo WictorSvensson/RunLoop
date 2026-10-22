@@ -1,5 +1,5 @@
 // SessionProfile v0.1 types — structured, multi-dimensional description of a
-// single training session, per RUNLOOP_SESSIONPROFILE_FORTYDLIGANDE.md §1-4
+// single training session, per Docs/SESSIONPROFILE_FORTYDLIGANDE.md §1-4
 // and Docs/RUNLOOP_ANALYSIS_ENGINE_SPEC.md (§2.4 explicit uncertainty, §6.4
 // threshold features, §6.6 intensity classes, §18 confidence, §25 quality).
 //

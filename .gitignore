@@ -42,3 +42,8 @@ next-env.d.ts
 
 # prisma generated client
 /generated/
+
+# session-profile fixture dumps are RAW ATHLETE DATA — never commit them.
+# Only the synthetic examples are tracked (they are what CI/fixture mode uses).
+scripts/session-profile/fixtures/*
+!scripts/session-profile/fixtures/example-*.json

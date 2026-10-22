@@ -5,6 +5,7 @@ import type {
   Confidence,
   SessionClass,
   SessionLapInput,
+  SessionProfile,
   SessionStreamsInput,
 } from "@/lib/session-profile/types";
 
@@ -47,8 +48,13 @@ export interface ActivityDTO {
   hasStreams: boolean;
   laps: ActivityLapDTO[] | null; // null when not loaded (list rows), [] when none stored
   // SessionProfile badge (broad class + confidence), computed server-side via
-  // lib/session-profile/profile.ts. Null when not computed (e.g. detail API).
+  // lib/session-profile/profile.ts. Present on list rows (badge-only payload:
+  // the full profile never crosses to the client for 25-200 rows at a time).
   profile: SessionProfileBadge | null;
+  // Full SessionProfile for the expanded detail panel only. Null on list rows
+  // (where `profile` carries the cheap badge) — the detail API is the one path
+  // that ships the whole thing, already computed once per activity.
+  sessionProfile: SessionProfile | null;
 }
 
 export interface SessionProfileBadge {
@@ -98,6 +104,7 @@ export function toActivityDTO(
   laps: ActivityLapDTO[] | null = null,
   hasStreams = false,
   profile: SessionProfileBadge | null = null,
+  sessionProfile: SessionProfile | null = null,
 ): ActivityDTO {
   return {
     id: a.id,
@@ -129,6 +136,7 @@ export function toActivityDTO(
     hasStreams,
     laps,
     profile,
+    sessionProfile,
   };
 }
 
@@ -146,9 +154,19 @@ export function hasPayloadStreams(payload: unknown): boolean {
   );
 }
 
-// Pure SessionProfile badge builder: broad class + confidence only, so the
-// Training list path and the detail API share one computation instead of
-// drifting apart. Laps/streams never cross to the client — only the badge.
+// Pure SessionProfile → badge projection. Takes an ALREADY computed profile,
+// so the detail path can compute sessionProfile() once and derive both the
+// badge and the full payload from the same result (no double computation).
+export function toSessionProfileBadge(profile: SessionProfile): SessionProfileBadge {
+  return {
+    classification: profile.classification,
+    confidence: profile.confidence,
+  };
+}
+
+// Pure SessionProfile badge builder for callers that only have the raw
+// activity/laps/streams (the Training list path). Same computation as the
+// detail path — the badge never drifts between the two.
 export function toProfileBadge(
   activity: {
     type: string | null;
@@ -170,20 +188,15 @@ export function toProfileBadge(
   // sessionProfile() is honest about thin inputs by design: missing
   // laps/streams surface as unknown classification and low/insufficient
   // confidence, never as fabricated precision.
-  const profile = sessionProfile(activity, laps, streams);
-  return {
-    classification: profile.classification,
-    confidence: profile.confidence,
-  };
+  return toSessionProfileBadge(sessionProfile(activity, laps, streams));
 }
 
 // Detailed representation of one activity with stored laps attached.
 // Scoped by userId for isolation. Throws "Activity not found" for missing
-// or foreign rows. The SessionProfile badge is computed here too, so the
-// detail response carries the same badge as the Training list rows —
-// expanding a row must never overwrite its badge with null (list-only
-// contract would also be acceptable, but computing in both paths is cheap:
-// one extra stream row already fetched for hasStreams).
+// or foreign rows. The SessionProfile is computed exactly once here and both
+// DTO fields (`sessionProfile` full payload, `profile` badge) are derived from
+// that single result — the expanded panel shows what the algorithm concluded
+// while the row badge stays identical to the Training list row.
 export async function getActivityDetail(
   userId: string,
   activityId: string,
@@ -207,7 +220,7 @@ export async function getActivityDetail(
     typeof payload === "object" && payload !== null && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
       : null;
-  const profile = toProfileBadge(
+  const sessionProfileValue = sessionProfile(
     {
       type: activity.type,
       name: activity.name,
@@ -232,7 +245,13 @@ export async function getActivityDetail(
     })),
     streams,
   );
-  return toActivityDTO(activity, lapDTOs, hasStreams, profile);
+  return toActivityDTO(
+    activity,
+    lapDTOs,
+    hasStreams,
+    toSessionProfileBadge(sessionProfileValue),
+    sessionProfileValue,
+  );
 }
 
 // Stored lap splits for the detail panel. Absent rows mean "none stored",

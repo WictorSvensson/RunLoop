@@ -7,10 +7,9 @@ coverage/
 # Secrets and local state — provided on the server via /opt/runloop/.env.
 .env*
 
-# Repo metadata and dev-only code (prototype stays in git, just not shipped).
+# Repo metadata and dev-only code (kept in git, just not shipped).
 .git/
 .github/
-prototype/
 prisma/migrations/*.sql.shadowdb*
 
 # Tests ship no runtime value; the image runs `node server.js` only.
