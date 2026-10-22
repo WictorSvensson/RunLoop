@@ -42,7 +42,10 @@ COPY scripts/prod-entrypoint.sh ./scripts/prod-entrypoint.sh
 # Prisma CLI for `migrate deploy` at boot. Installed on top of the standalone
 # tree (standalone only carries traced modules); the CLI version is pinned to
 # match package.json — keep the two in sync on Prisma upgrades.
-RUN npm install --no-save --no-package-lock --omit=dev prisma@7.10.0 \
+# The lockfile must stay in play: with `--no-package-lock` npm re-resolves
+# package.json from scratch against the partial traced node_modules and
+# arborist crashes ("Cannot read properties of null (reading 'edgesOut')").
+RUN npm install --no-save --omit=dev prisma@7.10.0 \
   && chmod +x ./scripts/prod-entrypoint.sh \
   && chown -R nextjs:nodejs /app
 USER nextjs
