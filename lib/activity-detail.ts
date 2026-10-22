@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { RUNNING_TYPES } from "@/lib/running-types";
+import { sessionProfile } from "@/lib/session-profile/profile";
+import type {
+  Confidence,
+  SessionClass,
+  SessionLapInput,
+  SessionStreamsInput,
+} from "@/lib/session-profile/types";
 
 // Activity detail DTOs + readers. Provider-agnostic: Garmin and Suunto rows
 // arrive with laps/streams stored at import time, so detail is always served
@@ -39,12 +46,22 @@ export interface ActivityDTO {
   analysisReady: boolean;
   hasStreams: boolean;
   laps: ActivityLapDTO[] | null; // null when not loaded (list rows), [] when none stored
+  // SessionProfile badge (broad class + confidence), computed server-side via
+  // lib/session-profile/profile.ts. Null when not computed (e.g. detail API).
+  profile: SessionProfileBadge | null;
+}
+
+export interface SessionProfileBadge {
+  classification: SessionClass;
+  confidence: Confidence;
 }
 
 export interface ActivityLapDTO {
   lapIndex: number;
   name: string | null;
   distance: number | null;
+  movingTime: number | null;
+  elapsedTime: number | null;
   averageSpeed: number | null;
   averageHeartrate: number | null;
 }
@@ -80,6 +97,7 @@ export function toActivityDTO(
   },
   laps: ActivityLapDTO[] | null = null,
   hasStreams = false,
+  profile: SessionProfileBadge | null = null,
 ): ActivityDTO {
   return {
     id: a.id,
@@ -110,12 +128,62 @@ export function toActivityDTO(
     analysisReady: a.analysisDataFetchedAt !== null,
     hasStreams,
     laps,
+    profile,
+  };
+}
+
+// Pure payload check shared by every hasStreams reader: true only when the
+// stored ActivityStream payload is a non-empty object. Exported so the
+// Training list path reuses the exact same predicate instead of
+// reimplementing it (previously three copies: list page, detail reader,
+// coverage count).
+export function hasPayloadStreams(payload: unknown): boolean {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    Object.keys(payload).length > 0
+  );
+}
+
+// Pure SessionProfile badge builder: broad class + confidence only, so the
+// Training list path and the detail API share one computation instead of
+// drifting apart. Laps/streams never cross to the client — only the badge.
+export function toProfileBadge(
+  activity: {
+    type: string | null;
+    name: string | null;
+    description: string | null;
+    distance: number | null;
+    movingTime: number | null;
+    elapsedTime: number | null;
+    averageSpeed: number | null;
+    maxSpeed: number | null;
+    averageHeartrate: number | null;
+    maxHeartrate: number | null;
+    totalElevationGain: number | null;
+    averageTemp: number | null;
+  },
+  laps: SessionLapInput[],
+  streams: SessionStreamsInput,
+): SessionProfileBadge {
+  // sessionProfile() is honest about thin inputs by design: missing
+  // laps/streams surface as unknown classification and low/insufficient
+  // confidence, never as fabricated precision.
+  const profile = sessionProfile(activity, laps, streams);
+  return {
+    classification: profile.classification,
+    confidence: profile.confidence,
   };
 }
 
 // Detailed representation of one activity with stored laps attached.
 // Scoped by userId for isolation. Throws "Activity not found" for missing
-// or foreign rows.
+// or foreign rows. The SessionProfile badge is computed here too, so the
+// detail response carries the same badge as the Training list rows —
+// expanding a row must never overwrite its badge with null (list-only
+// contract would also be acceptable, but computing in both paths is cheap:
+// one extra stream row already fetched for hasStreams).
 export async function getActivityDetail(
   userId: string,
   activityId: string,
@@ -126,11 +194,45 @@ export async function getActivityDetail(
   if (!activity) {
     throw new Error("Activity not found");
   }
-  const [laps, hasStreams] = await Promise.all([
+  const [lapDTOs, streamRow] = await Promise.all([
     loadLapDTOs(activity.id),
-    hasStoredStreams(activity.id),
+    prisma.activityStream.findUnique({
+      where: { activityId: activity.id },
+      select: { payload: true },
+    }),
   ]);
-  return toActivityDTO(activity, laps, hasStreams);
+  const payload = streamRow?.payload;
+  const hasStreams = hasPayloadStreams(payload);
+  const streams: SessionStreamsInput =
+    typeof payload === "object" && payload !== null && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+  const profile = toProfileBadge(
+    {
+      type: activity.type,
+      name: activity.name,
+      description: activity.description,
+      distance: activity.distance,
+      movingTime: activity.movingTime,
+      elapsedTime: activity.elapsedTime,
+      averageSpeed: activity.averageSpeed,
+      maxSpeed: activity.maxSpeed,
+      averageHeartrate: activity.averageHeartrate,
+      maxHeartrate: activity.maxHeartrate,
+      totalElevationGain: activity.totalElevationGain,
+      averageTemp: activity.averageTemp,
+    },
+    lapDTOs.map((lap) => ({
+      lapIndex: lap.lapIndex,
+      distance: lap.distance,
+      movingTime: lap.movingTime,
+      elapsedTime: lap.elapsedTime,
+      averageSpeed: lap.averageSpeed,
+      averageHeartrate: lap.averageHeartrate,
+    })),
+    streams,
+  );
+  return toActivityDTO(activity, lapDTOs, hasStreams, profile);
 }
 
 // Stored lap splits for the detail panel. Absent rows mean "none stored",
@@ -144,27 +246,11 @@ async function loadLapDTOs(activityId: string): Promise<ActivityLapDTO[]> {
     lapIndex: lap.lapIndex,
     name: lap.name,
     distance: lap.distance,
+    movingTime: lap.movingTime,
+    elapsedTime: lap.elapsedTime,
     averageSpeed: lap.averageSpeed,
     averageHeartrate: lap.averageHeartrate,
   }));
-}
-
-// True only when stored streams contain at least one stream — matching
-// getAnalysisCoverage's withStreams count, so the panel never claims streams
-// are stored for an empty payload.
-async function hasStoredStreams(activityId: string): Promise<boolean> {
-  const streamRow = await prisma.activityStream.findUnique({
-    where: { activityId },
-    select: { payload: true },
-  });
-  if (!streamRow) return false;
-  const payload = streamRow.payload;
-  return (
-    typeof payload === "object" &&
-    payload !== null &&
-    !Array.isArray(payload) &&
-    Object.keys(payload).length > 0
-  );
 }
 
 export interface AnalysisCoverage {
@@ -198,10 +284,7 @@ export async function getAnalysisCoverage(userId: string): Promise<AnalysisCover
     withLaps: runs.filter((run) => run._count.laps > 0).length,
     withStreams: runs.filter((run) => {
       if (run.stream === null) return false;
-      const payload = run.stream.payload;
-      return typeof payload === "object" && payload !== null && !Array.isArray(payload)
-        ? Object.keys(payload).length > 0
-        : false;
+      return hasPayloadStreams(run.stream.payload);
     }).length,
   };
 }

@@ -14,6 +14,7 @@ import {
 } from "@/scripts/import-suunto/gpx.ts";
 import {
   decodeFit,
+  fitStreamPayload,
   mergeSummaryWithFit,
   type FitLap,
   type FitSummary,
@@ -255,13 +256,15 @@ export async function POST(request: NextRequest) {
         heartrate: { data: summary.series.heartrate },
         altitude: { data: summary.series.altitude },
       };
-      if (fit && fit.series.cadence.length > 0) {
-        payload.cadence = { data: fit.series.cadence };
-        payload.fitTime = { data: fit.series.time };
-      }
-      if (fit && fit.series.watts.length > 0) {
-        payload.watts = { data: fit.series.watts };
-        payload.fitTime = { data: fit.series.time };
+      if (fit) {
+        // GPX stays the source of truth for HR/elevation, so only the keys
+        // GPX lacks ride along (all record-indexed on the FIT fitTime clock —
+        // join on fitTime, never by index against GPX time). FIT-only sync
+        // paths store heartrate/altitude from FIT via the same helper.
+        const fitKeys = fitStreamPayload(fit.series);
+        for (const key of ["fitTime", "cadence", "watts", "speed"] as const) {
+          if (fitKeys[key]) payload[key] = fitKeys[key];
+        }
       }
 
       // Activity + laps + stream commit atomically: analysisDataFetchedAt
@@ -329,6 +332,8 @@ export async function POST(request: NextRequest) {
               distance: lap.distance,
               movingTime: lap.movingTime,
               elapsedTime: lap.elapsedTime,
+              startIndex: lap.startIndex,
+              endIndex: lap.endIndex,
               averageSpeed: lap.averageSpeed,
               maxSpeed: lap.maxSpeed,
               averageHeartrate: lap.averageHeartrate,
@@ -342,7 +347,10 @@ export async function POST(request: NextRequest) {
 
         if (!fit) {
           // No FIT this upload: preserve previously stored FIT keys instead
-          // of dropping cadence/watts/fitTime.
+          // of dropping cadence/watts/speed/fitTime (mirrors the CLI
+          // backfiller scripts/import-suunto/import.ts; GPX-owned
+          // heartrate/altitude keep their GPX values above and are never
+          // preserved from FIT here).
           const prev = await tx.activityStream.findUnique({
             where: { activityId },
             select: { payload: true },
@@ -353,7 +361,7 @@ export async function POST(request: NextRequest) {
             !Array.isArray(prev?.payload)
               ? (prev.payload as Record<string, unknown>)
               : null;
-          for (const key of ["cadence", "watts", "fitTime"] as const) {
+          for (const key of ["cadence", "watts", "speed", "fitTime"] as const) {
             if (prevPayload && key in prevPayload) {
               payload[key] = prevPayload[key] as { data: unknown };
             }

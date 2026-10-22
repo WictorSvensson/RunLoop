@@ -12,7 +12,7 @@
 import { GarminConnect } from "@flow-js/garmin-connect";
 import type { IActivity } from "@flow-js/garmin-connect";
 import { prisma } from "@/lib/prisma";
-import { decodeFit, mergeSummaryWithFit } from "../../scripts/import-suunto/fit";
+import { decodeFit, fitStreamPayload, mergeSummaryWithFit } from "../../scripts/import-suunto/fit";
 import type { TrackSummary } from "../../scripts/import-suunto/gpx";
 import { findDuplicateCandidate } from "@/lib/analysis/duplicate";
 import {
@@ -199,7 +199,9 @@ async function importOne(
   else result.imported++;
 
   // Laps + streams, same replace-and-mark-ready contract as the other
-  // importers. FIT series carry their own fitTime offsets (record-indexed).
+  // importers. FIT series carry their own fitTime offsets (record-indexed);
+  // lap startIndex/endIndex address those same series arrays, with absolute
+  // startDate as the cross-clock anchor (FIT fitTime vs GPX time differ).
   const fitLaps = fit?.laps ?? [];
   await prisma.$transaction(async (tx) => {
     if (fitLaps.length > 0) {
@@ -212,6 +214,8 @@ async function importOne(
           distance: lap.distance,
           movingTime: lap.movingTime,
           elapsedTime: lap.elapsedTime,
+          startIndex: lap.startIndex,
+          endIndex: lap.endIndex,
           averageSpeed: lap.averageSpeed,
           maxSpeed: lap.maxSpeed,
           averageHeartrate: lap.averageHeartrate,
@@ -224,10 +228,8 @@ async function importOne(
     }
     const payload: Record<string, { data: (number | null)[] }> = {};
     if (fit && fit.series.time.length > 0) {
-      payload.fitTime = { data: fit.series.time };
+      Object.assign(payload, fitStreamPayload(fit.series));
       if (fit.series.distance.length > 0) payload.distance = { data: fit.series.distance };
-      if (fit.series.cadence.length > 0) payload.cadence = { data: fit.series.cadence };
-      if (fit.series.watts.length > 0) payload.watts = { data: fit.series.watts };
       await tx.activityStream.upsert({
         where: { activityId: activity.id },
         create: { activityId: activity.id, payload, fetchedAt: now },

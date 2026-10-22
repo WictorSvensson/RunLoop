@@ -2,6 +2,10 @@
 
 import { useRef, useState } from "react";
 import type { ActivityDTO } from "@/lib/activity-detail";
+import type {
+  Confidence,
+  SessionClass,
+} from "@/lib/session-profile/types";
 import {
   formatDistance,
   formatDuration,
@@ -10,6 +14,67 @@ import {
   formatDate,
   toneFor,
 } from "@/lib/format";
+
+// Broad-class label for the SessionProfile badge. "Unclassified" covers both
+// classification "unknown" and "insufficient" confidence — honest empty state,
+// never a guess.
+function profileLabel(classification: SessionClass): string {
+  switch (classification) {
+    case "easy-recovery":
+      return "Easy";
+    case "long":
+      return "Long";
+    case "threshold-tempo":
+      return "Threshold";
+    case "interval":
+      return "Intervals";
+    case "race-benchmark":
+      return "Race";
+    case "mixed":
+      return "Mixed";
+    case "unknown":
+      return "Unclassified";
+  }
+}
+
+function confidenceLabel(confidence: Confidence): string {
+  switch (confidence) {
+    case "high":
+      return "high confidence";
+    case "moderate":
+      return "moderate confidence";
+    case "low":
+      return "low confidence";
+    case "insufficient":
+      return "not enough data";
+  }
+}
+
+function ProfileBadge({
+  classification,
+  confidence,
+}: {
+  classification: SessionClass;
+  confidence: Confidence;
+}) {
+  const unclassified =
+    classification === "unknown" || confidence === "insufficient";
+  const text = unclassified
+    ? "Unclassified · not enough data"
+    : `${profileLabel(classification)} · ${confidenceLabel(confidence)}`;
+  return (
+    <span
+      className={`profile-badge confidence-${confidence}`}
+      title={
+        unclassified
+          ? "No clear session type from the stored laps and streams yet."
+          : `Session type ${profileLabel(classification).toLowerCase()} (${confidence} confidence).`
+      }
+    >
+      {text}
+    </span>
+  );
+}
 
 // One row + its expandable detail panel.
 function ActivityRow({ activity }: { activity: ActivityDTO }) {
@@ -40,7 +105,14 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
         const res = await fetch(`/api/activities/${activity.id}`);
         const data = await res.json();
         if (!res.ok) setError(data.error ?? "Could not load details.");
-        else setDetail(data.activity as ActivityDTO);
+        // Belt-and-braces: the detail path computes the same badge, but a
+        // list-computed badge must never be overwritten with null if the two
+        // ever drift apart.
+        else
+          setDetail({
+            ...(data.activity as ActivityDTO),
+            profile: (data.activity as ActivityDTO).profile ?? activity.profile,
+          } as ActivityDTO);
       } catch {
         setError("Could not reach the server.");
       } finally {
@@ -75,6 +147,12 @@ function ActivityRow({ activity }: { activity: ActivityDTO }) {
               )}
             </strong>
             <span>{formatDate(activity.startDate)}</span>
+            {activity.profile && (
+              <ProfileBadge
+                classification={activity.profile.classification}
+                confidence={activity.profile.confidence}
+              />
+            )}
           </div>
         </div>
         <span>{formatDistance(activity.distance)}</span>

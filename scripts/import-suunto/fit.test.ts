@@ -3,7 +3,10 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   decodeFit,
+  fitStreamPayload,
+  mapLapIndicesToRecords,
   mergeSummaryWithFit,
+  type FitSeries,
   type FitSummary,
 } from "./fit.ts";
 import type { TrackSummary } from "./gpx.ts";
@@ -41,8 +44,29 @@ function fitSummary(overrides: Partial<FitSummary> = {}): FitSummary {
     maxSpeed: 3.2,
     calories: 495,
     totalAscent: 88,
-    series: { cadence: [170], watts: [80], distance: [5005], time: [0] },
+    series: {
+      cadence: [170],
+      watts: [80],
+      heartrate: [156],
+      speed: [3.1],
+      altitude: [50],
+      distance: [5005],
+      time: [0],
+    },
     laps: [],
+    ...overrides,
+  };
+}
+
+function fitSeries(overrides: Partial<FitSeries> = {}): FitSeries {
+  return {
+    cadence: [170, 172],
+    watts: [80, 82],
+    heartrate: [150, 152],
+    speed: [3.0, 3.1],
+    altitude: [10, 11],
+    distance: [0, 3],
+    time: [0, 1],
     ...overrides,
   };
 }
@@ -131,6 +155,56 @@ describe("mergeSummaryWithFit", () => {
     expect(merged.averageCadence).toBeNull();
     expect(merged.calories).toBeNull();
     expect(merged.distanceFromFit).toBe(false);
+  });
+});
+
+describe("mapLapIndicesToRecords", () => {
+  it("maps lap starts to record indices with end as next start minus one", () => {
+    const result = mapLapIndicesToRecords(
+      [1000, 2000, 3000, 4000],
+      [1000, 3000],
+    );
+    expect(result).toEqual([
+      { startIndex: 0, endIndex: 1 },
+      { startIndex: 2, endIndex: 3 },
+    ]);
+  });
+
+  it("clamps out-of-range starts and nulls unknown starts", () => {
+    const result = mapLapIndicesToRecords(
+      [1000, 2000],
+      [null, 500, 9999],
+    );
+    expect(result).toEqual([
+      { startIndex: null, endIndex: null },
+      { startIndex: 0, endIndex: 0 },
+      { startIndex: 1, endIndex: 1 },
+    ]);
+  });
+
+  it("returns nulls when there are no records", () => {
+    expect(mapLapIndicesToRecords([], [1000])).toEqual([
+      { startIndex: null, endIndex: null },
+    ]);
+  });
+});
+
+describe("fitStreamPayload", () => {
+  it("emits non-empty series and omits empty ones (distance never included)", () => {
+    const payload = fitStreamPayload(fitSeries());
+    expect(Object.keys(payload).sort()).toEqual(
+      ["altitude", "cadence", "fitTime", "heartrate", "speed", "watts"].sort(),
+    );
+    expect(payload.fitTime).toEqual({ data: [0, 1] });
+    expect(payload.heartrate).toEqual({ data: [150, 152] });
+    expect(payload).not.toHaveProperty("distance");
+  });
+
+  it("omits empty series with the empty-[]=absent convention", () => {
+    const payload = fitStreamPayload(
+      fitSeries({ cadence: [], watts: [], heartrate: [], speed: [], altitude: [], time: [] }),
+    );
+    expect(payload).toEqual({});
   });
 });
 

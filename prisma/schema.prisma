@@ -27,6 +27,7 @@ model User {
 
   dailyCheckins       DailyCheckin[]
   garminConnection    GarminConnection?
+  suuntoConnection    SuuntoConnection?
   activities          Activity[]
   coachBriefs         CoachBrief[]
   integrationSettings IntegrationSetting[]
@@ -79,6 +80,23 @@ model GarminConnection {
   username       String? // login email (hint for reconnect; not a secret)
   tokenJson      String // JSON.stringify of the library's exported token pair
   expiresAt      DateTime? // oauth2 expiry when known (null = unknown)
+  lastSyncedAt   DateTime? // last successful activity import
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// Stores a user's Suunto Cloud API (OAuth2) tokens. One connection per
+// user. The client secret / auth code exist only inside the OAuth exchange —
+// only the exported token pair below persists. Tokens are re-exported and
+// saved after every use since refresh rotates them.
+model SuuntoConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  suuntoUserId String? // Suunto App username from the JWT `user` claim (display/diagnostics only)
+  username       String? // display hint for reconnect; not a secret
+  tokenJson      String // JSON of { access_token, refresh_token, obtained_at_ms, expires_in }
+  expiresAt      DateTime? // access-token expiry when known (null = unknown)
   lastSyncedAt   DateTime? // last successful activity import
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

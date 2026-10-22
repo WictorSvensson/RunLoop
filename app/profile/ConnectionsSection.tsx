@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GarminSync } from "./GarminSync";
+import { SuuntoSync } from "./SuuntoSync";
 import { SuuntoUpload } from "./SuuntoUpload";
 import { IntegrationToggle } from "./IntegrationToggle";
 
@@ -11,6 +12,9 @@ interface Props {
   isGarminConnected: boolean;
   garminStatusText: string;
   defaultUsername?: string;
+  isSuuntoConnected: boolean;
+  suuntoStatusText: string;
+  suuntoNotice?: string | null;
 }
 
 // Client wrapper for the Profile Connections list. Each connection is a
@@ -26,6 +30,9 @@ export function ConnectionsSection({
   isGarminConnected,
   garminStatusText,
   defaultUsername,
+  isSuuntoConnected,
+  suuntoStatusText,
+  suuntoNotice,
 }: Props) {
   const [garminEnabled, setGarminEnabled] = useState(garminEnabledInitial);
   const [suuntoEnabled, setSuuntoEnabled] = useState(suuntoEnabledInitial);
@@ -62,18 +69,24 @@ export function ConnectionsSection({
           <strong>Suunto</strong>
           <span>
             {suuntoEnabled
-              ? "Upload your history export (.zip from the Suunto app)."
-              : "Upload your history export (.zip from the Suunto app) · uploads off — history kept."}
+              ? suuntoStatusText
+              : `${suuntoStatusText} · sync & uploads off — tokens & history kept`}
           </span>
+          {suuntoNotice && <span>{suuntoNotice}</span>}
         </div>
         <div className="connection-actions">
           <IntegrationToggle
             source="SUUNTO"
             enabled={suuntoEnabled}
-            label="Suunto uploads"
+            label="Suunto sync & uploads"
             onChange={setSuuntoEnabled}
           />
-          {suuntoEnabled && <SuuntoUpload />}
+          {suuntoEnabled && (
+            <>
+              <SuuntoSync isConnected={isSuuntoConnected} />
+              <SuuntoUpload />
+            </>
+          )}
         </div>
       </div>
     </div>

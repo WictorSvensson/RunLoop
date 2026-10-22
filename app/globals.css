@@ -436,6 +436,53 @@
 .app-shell .suunto-error { color: #e0a27e; }
 .app-shell .suunto-ok { color: #8fc4b4; }
 
+/* SessionProfile badge on training rows: inline pill, no light card (stays
+   on the dark shell surface). Extra scoping wins over `.activity-detail
+   span` / `.app-shell .activity-detail span` regardless of source order. */
+.table-row .activity-detail .profile-badge { display: inline-block; margin-top: 5px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 500 10px 'DM Mono', monospace; letter-spacing: .04em; white-space: nowrap; max-width: 100%; overflow-wrap: anywhere; }
+.table-row .activity-detail .profile-badge.confidence-high { border-color: #76a99c; color: #3e6b5e; }
+.table-row .activity-detail .profile-badge.confidence-moderate { border-color: #b9b5d1; color: #6a6490; }
+.table-row .activity-detail .profile-badge.confidence-low { border-color: var(--line); color: var(--muted); }
+.table-row .activity-detail .profile-badge.confidence-insufficient { border-style: dashed; color: var(--muted); }
+.app-shell .table-row .activity-detail .profile-badge { border-color: #53615b; color: #9ca69f; }
+.app-shell .table-row .activity-detail .profile-badge.confidence-high { border-color: #76a99c; color: #8fc4b4; }
+.app-shell .table-row .activity-detail .profile-badge.confidence-moderate { border-color: #857b99; color: #b9b5d1; }
+.app-shell .table-row .activity-detail .profile-badge.confidence-low { border-color: #53615b; color: #9ca69f; }
+.app-shell .table-row .activity-detail .profile-badge.confidence-insufficient { border-style: dashed; border-color: #4f5e56; color: #77847d; }
+/* Long badge text ("Unclassified · not enough data") must wrap instead of
+   overflowing the stacked ≤700px row. */
+@media (max-width: 700px) {
+  .table-row .activity-detail .profile-badge { white-space: normal; }
+}
+
+/* Training archive filters + pagination (server-rendered GET form + links).
+   Base rules suit light surfaces; .app-shell overrides keep contrast on the
+   dark shell (inputs mirror the Suunto/profile dark inputs). */
+.training-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 34px; }
+.training-filters label { display: grid; gap: 6px; color: var(--muted); font: 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
+.training-filters select, .training-filters input { border: 1px solid var(--line); border-radius: 3px; background: #fff; color: var(--ink); padding: 10px 12px; font-size: 13px; min-width: 0; }
+.training-filters select:focus-visible, .training-filters input:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+.training-search { flex: 1 1 180px; }
+.training-search input { width: 100%; }
+.training-filter-button { padding: 11px 19px; }
+.training-meta { margin-top: 18px; }
+.training-reset { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.training-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 26px; font: 11px 'DM Mono', monospace; }
+.training-pagination a { border: 1px solid var(--line); border-radius: 3px; color: var(--ink); padding: 8px 12px; text-decoration: none; }
+.training-pagination a:hover { border-color: var(--ink); }
+.training-page-current { border: 1px solid var(--ink); border-radius: 3px; padding: 8px 12px; font-weight: 600; }
+.training-page-disabled { color: var(--muted); padding: 8px 4px; opacity: .6; }
+.training-page-gap { color: var(--muted); padding: 8px 2px; }
+.app-shell .training-filters label { color: #9ca69f; }
+.app-shell .training-filters select, .app-shell .training-filters input { background: #171c1a; border-color: #36423d; color: #f4f2e9; }
+.app-shell .training-filters select option { background: #171c1a; color: #f4f2e9; }
+.app-shell .training-pagination a { border-color: #53615b; color: #b7c9c0; }
+.app-shell .training-pagination a:hover { border-color: #76a99c; color: #f4f2e9; }
+.app-shell .training-page-current { border-color: #76a99c; color: #f4f2e9; }
+.app-shell .training-page-disabled { color: #77847d; }
+.app-shell .training-page-gap { color: #77847d; }
+.app-shell .training-reset { color: #8fc4b4; }
+
 /* Narrow screens: the row stacks, so the right column goes full-width and
    left-aligns. Extra `.connection-list` scoping wins over the later base
    rules regardless of source order. */

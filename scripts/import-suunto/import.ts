@@ -28,6 +28,7 @@ import {
 } from "./gpx.ts";
 import {
   decodeFit,
+  fitStreamPayload,
   mergeSummaryWithFit,
   type FitLap,
   type FitSummary,
@@ -366,13 +367,15 @@ async function main(): Promise<void> {
             await client.query(
               `INSERT INTO "ActivityLap"
                  (id, "activityId", "lapIndex", "startDate", distance, "movingTime", "elapsedTime",
+                  "startIndex", "endIndex",
                   "averageSpeed", "maxSpeed", "averageHeartrate", "maxHeartrate",
                   "averageCadence", "averageWatts", "totalElevationGain", "createdAt", "updatedAt")
-               VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
+               VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
               [
                 activityId, lap.lapIndex,
                 lap.startDate !== null ? lap.startDate.toISOString() : null,
                 lap.distance, lap.movingTime, lap.elapsedTime,
+                lap.startIndex, lap.endIndex,
                 lap.averageSpeed, lap.maxSpeed, lap.averageHeartrate, lap.maxHeartrate,
                 lap.averageCadence, lap.averageWatts, lap.totalElevationGain, nowIso,
               ],
@@ -381,10 +384,14 @@ async function main(): Promise<void> {
         }
 
         // Stream payload contract (Suunto): keys time/distance/heartrate/
-        // altitude are GPX-derived; cadence/watts/fitTime are FIT-derived.
-        // FIT arrays are record-indexed (smart recording, pauses) and can
-        // differ in length from GPX `time` — consumers must join FIT series
-        // on `fitTime`, never by index against `time`. Entries may be null.
+        // altitude are GPX-derived (GPX stays the source of truth for track,
+        // pace, HR and elevation); FIT contributes only the keys GPX lacks —
+        // fitTime/cadence/watts/speed — all record-indexed on the FIT clock
+        // (offset seconds from the first record, see fit.ts), so consumers
+        // must join FIT series on `fitTime`, never by index against `time`.
+        // FIT heartrate/altitude are intentionally NOT stored here (GPX
+        // already carries them); FIT-only sync paths store them from FIT.
+        // Entries may be null; empty [] means absent.
         const fitDistance = row.fit?.series.distance ?? [];
         const distanceSeries =
           row.distance !== null ? s.series.distance : (fitDistance.length > 0 ? fitDistance : s.series.distance);
@@ -394,17 +401,16 @@ async function main(): Promise<void> {
           heartrate: { data: s.series.heartrate },
           altitude: { data: s.series.altitude },
         };
-        if (row.fit && row.fit.series.cadence.length > 0) {
-          payload.cadence = { data: row.fit.series.cadence };
-          payload.fitTime = { data: row.fit.series.time };
-        }
-        if (row.fit && row.fit.series.watts.length > 0) {
-          payload.watts = { data: row.fit.series.watts };
-          payload.fitTime = { data: row.fit.series.time };
+        if (row.fit) {
+          const fitKeys = fitStreamPayload(row.fit.series);
+          // GPX-owned keys (heartrate/altitude) keep their GPX values above.
+          for (const key of ["fitTime", "cadence", "watts", "speed"] as const) {
+            if (fitKeys[key]) payload[key] = fitKeys[key];
+          }
         }
         if (!row.fit) {
           // No FIT this run (mate missing/unreadable): preserve previously
-          // stored FIT keys instead of dropping cadence/watts/fitTime.
+          // stored FIT keys instead of dropping cadence/watts/speed/fitTime.
           const prev = await client.query(
             `SELECT payload FROM "ActivityStream" WHERE "activityId" = $1`,
             [activityId],
@@ -412,7 +418,7 @@ async function main(): Promise<void> {
           const prevPayload = prev.rowCount !== 0
             ? (prev.rows[0].payload as Record<string, { data: unknown }>)
             : null;
-          for (const key of ["cadence", "watts", "fitTime"] as const) {
+          for (const key of ["cadence", "watts", "speed", "fitTime"] as const) {
             if (prevPayload !== null && typeof prevPayload === "object" && key in prevPayload) {
               payload[key] = prevPayload[key];
             }

@@ -15,16 +15,35 @@ import { Decoder, Stream } from "@garmin/fitsdk";
 import type { LapMesg, RecordMesg, SessionMesg } from "@garmin/fitsdk";
 import type { TrackSummary } from "./gpx.ts";
 
+// Backfill note: no separate re-decode script is needed. FIT sources stay
+// re-downloadable (Garmin/Suunto cloud APIs) or user-local (Suunto export
+// zips), and every importer upserts streams idempotently without wiping on
+// FIT failure — so a full resync (`fullResync` / `?limit=N` staging) or a
+// zip re-upload re-decodes and refreshes stored series in place. Existing
+// streams are never wiped: writers only touch laps/streams when FIT delivers.
+
 export interface FitSeries {
   cadence: (number | null)[];
   watts: (number | null)[];
+  /** Per-record HR in bpm (null when the record carries none). */
+  heartrate: (number | null)[];
+  /** Per-record device speed in m/s (null when absent). */
+  speed: (number | null)[];
+  /** Per-record altitude in m (null when absent). */
+  altitude: (number | null)[];
   /** Cumulative meters; present on treadmill/pool files that lack GPS. */
   distance: number[];
   /**
-   * Seconds from the first record message, parallel to cadence/watts/
-   * distance above. Stored as `fitTime` in the payload because FIT record
-   * count (smart recording, pauses) can differ from the GPX point count —
-   * consumers must join on fitTime, never by array index against `time`.
+   * Clock + alignment contract (sub-lap rep detection depends on this):
+   * - `time` holds OFFSET seconds from the first record message's timestamp
+   *   (not absolute epoch) — FIT record count (smart recording, pauses) can
+   *   differ from any GPX point count, so consumers must join on fitTime,
+   *   never by array index against GPX `time`.
+   * - Every series above is built from the SAME paired-tuple loop and shares
+   *   the SAME length/indexing as `time`/`distance`: a record is dropped as a
+   *   whole tuple only when its distance is null; every other null is kept as
+   *   null in place. Index i means the same record in all series.
+   * - Stored as `fitTime` in the ActivityStream payload.
    */
   time: number[];
 }
@@ -32,6 +51,15 @@ export interface FitSeries {
 export interface FitLap {
   lapIndex: number; // 1-based
   startDate: Date | null;
+  /**
+   * Record indices into the decoded FitSeries arrays (inclusive), so laps
+   * join to per-record streams without timestamp math. Absolute `startDate`
+   * stays the cross-clock anchor (FIT fitTime vs GPX time are different
+   * clocks — offset-sec vs absolute — joinable only via startDate or these
+   * indices). Null when the lap has no startTime or no records matched.
+   */
+  startIndex: number | null;
+  endIndex: number | null;
   distance: number | null;
   movingTime: number | null; // totalTimerTime when present, else elapsed
   elapsedTime: number | null;
@@ -77,6 +105,10 @@ function toFitLap(lap: LapMesg, index: number): FitLap {
   return {
     lapIndex: index + 1,
     startDate: lap.startTime instanceof Date ? lap.startTime : null,
+    // Index mapping needs kept-record timestamps — filled by decodeFit after
+    // the series loop (mapLapIndicesToRecords); null until then.
+    startIndex: null,
+    endIndex: null,
     distance,
     movingTime: moving !== null ? Math.round(moving) : null,
     elapsedTime: elapsed !== null ? Math.round(elapsed) : null,
@@ -91,10 +123,58 @@ function toFitLap(lap: LapMesg, index: number): FitLap {
 }
 
 /**
- * Decodes a Suunto .fit file into session totals, per-second cadence/power
- * streams and laps. Returns null only when no session message exists (caller
- * keeps the GPX-only result — FIT is gap-fill, never load-bearing). Non-fatal
- * SDK warnings don't discard a usable session; they're logged for diagnosis.
+ * Maps lap boundaries onto kept-record indices. Pure — unit-tested.
+ *
+ * @param recordTimeMs absolute epoch ms per kept record (null when the record
+ *   carried no timestamp), index-aligned with every FitSeries array.
+ * @param lapStartsMs absolute epoch ms per lap start (null when unknown).
+ * @returns one {startIndex, endIndex} pair per lap (inclusive). A lap with no
+ *   start maps to nulls; a start before the first record clamps to 0; a start
+ *   past the last record clamps to the final index; each end is the next
+ *   lap's start minus one (last lap runs to the final record).
+ */
+export function mapLapIndicesToRecords(
+  recordTimeMs: (number | null)[],
+  lapStartsMs: (number | null)[],
+): { startIndex: number | null; endIndex: number | null }[] {
+  const starts: (number | null)[] = lapStartsMs.map((lapStart) => {
+    if (lapStart === null || recordTimeMs.length === 0) return null;
+    for (let j = 0; j < recordTimeMs.length; j++) {
+      const t = recordTimeMs[j];
+      if (t !== null && t >= lapStart) return j;
+    }
+    return recordTimeMs.length - 1;
+  });
+  return starts.map((start, i) => {
+    if (start === null) return { startIndex: null, endIndex: null };
+    const next = starts.slice(i + 1).find((s) => s !== null);
+    const end = (next === undefined ? recordTimeMs.length : next) - 1;
+    return { startIndex: start, endIndex: Math.max(end, start) };
+  });
+}
+
+/** Non-empty FIT series keys for the ActivityStream payload fragment, with
+ *  the repo's empty-[]=absent convention (a series that is empty or all-null
+ *  decodes to [] and is omitted). Distance is NOT included — GPX-backed paths
+ *  resolve it with GPX priority, so callers handle it explicitly. */
+export function fitStreamPayload(
+  series: FitSeries,
+): Record<string, { data: (number | null)[] }> {
+  const payload: Record<string, { data: (number | null)[] }> = {};
+  if (series.time.length > 0) payload.fitTime = { data: series.time };
+  if (series.heartrate.length > 0) payload.heartrate = { data: series.heartrate };
+  if (series.altitude.length > 0) payload.altitude = { data: series.altitude };
+  if (series.speed.length > 0) payload.speed = { data: series.speed };
+  if (series.cadence.length > 0) payload.cadence = { data: series.cadence };
+  if (series.watts.length > 0) payload.watts = { data: series.watts };
+  return payload;
+}
+
+/**
+ * Decodes a Suunto .fit file into session totals, per-record streams and
+ * laps. Returns null only when no session message exists (caller keeps the
+ * GPX-only result — FIT is gap-fill, never load-bearing). Non-fatal SDK
+ * warnings don't discard a usable session; they're logged for diagnosis.
  */
 export function decodeFit(bytes: Uint8Array): FitSummary | null {
   let messages;
@@ -112,23 +192,66 @@ export function decodeFit(bytes: Uint8Array): FitSummary | null {
   if (!session) return null;
 
   const records: RecordMesg[] = messages.recordMesgs ?? [];
-  const cadence: (number | null)[] = records.map((r) => num(r.cadence));
-  const watts: (number | null)[] = records
-    .map((r) => num(r.power))
-    .map((w) => (w !== null ? Math.round(w) : null));
-  const distance: number[] = records
-    .map((r) => num(r.distance))
-    .filter((d): d is number => d !== null);
   const firstTs = records.length > 0 && records[0].timestamp instanceof Date
     ? records[0].timestamp.getTime()
     : null;
-  const time: number[] = records.map((r) =>
-    firstTs !== null && r.timestamp instanceof Date
-      ? Math.round((r.timestamp.getTime() - firstTs) / 1000)
-      : 0,
-  );
+  // Build paired tuples BEFORE filtering: every series below is pushed in
+  // this one loop, so index i means the same record in all of them (profile.ts
+  // derivePaceStream pairs fitTime[i] with distance[i]). Records without a
+  // distance carry no position — drop the whole tuple, keep every other null
+  // in place so the series stay index-aligned.
+  const keptTimeMs: (number | null)[] = [];
+  const keptTime: number[] = [];
+  const keptDistance: number[] = [];
+  const keptCadence: (number | null)[] = [];
+  const keptWatts: (number | null)[] = [];
+  const keptHeartrate: (number | null)[] = [];
+  const keptSpeed: (number | null)[] = [];
+  const keptAltitude: (number | null)[] = [];
+  for (const r of records) {
+    const d = num(r.distance);
+    if (d === null) continue;
+    keptDistance.push(d);
+    keptTimeMs.push(r.timestamp instanceof Date ? r.timestamp.getTime() : null);
+    keptTime.push(
+      firstTs !== null && r.timestamp instanceof Date
+        ? Math.round((r.timestamp.getTime() - firstTs) / 1000)
+        : 0,
+    );
+    keptCadence.push(num(r.cadence));
+    const w = num(r.power);
+    keptWatts.push(w !== null ? Math.round(w) : null);
+    const hr = num(r.heartRate);
+    keptHeartrate.push(hr !== null ? Math.round(hr) : null);
+    const spd = num(r.speed);
+    keptSpeed.push(spd !== null ? Math.round(spd * 1000) / 1000 : null);
+    keptAltitude.push(num(r.altitude));
+  }
+  const cadence = keptCadence;
+  const watts = keptWatts;
+  const heartrate = keptHeartrate;
+  const speed = keptSpeed;
+  const altitude = keptAltitude;
+  const distance = keptDistance;
+  const time = keptTime;
   const hasCadence = cadence.some((c) => c !== null);
   const hasWatts = watts.some((w) => w !== null);
+  const hasHeartrate = heartrate.some((h) => h !== null);
+  const hasSpeed = speed.some((s) => s !== null);
+  const hasAltitude = altitude.some((a) => a !== null);
+  const hasAnySeries = hasCadence || hasWatts || hasHeartrate || hasSpeed || hasAltitude;
+
+  const laps = (messages.lapMesgs ?? []).map(toFitLap);
+  // Lap↔record join: absolute lap startTimes against kept-record timestamps.
+  // Indices address the aligned series arrays (same clock/length as time).
+  const indices = mapLapIndicesToRecords(
+    keptTimeMs,
+    laps.map((lap) => (lap.startDate !== null ? lap.startDate.getTime() : null)),
+  );
+  laps.forEach((lap, i) => {
+    lap.startIndex = indices[i].startIndex;
+    lap.endIndex = indices[i].endIndex;
+  });
 
   const moving = num(session.totalTimerTime) ?? num(session.totalElapsedTime);
 
@@ -148,10 +271,13 @@ export function decodeFit(bytes: Uint8Array): FitSummary | null {
     series: {
       cadence: hasCadence ? cadence : [],
       watts: hasWatts ? watts : [],
+      heartrate: hasHeartrate ? heartrate : [],
+      speed: hasSpeed ? speed : [],
+      altitude: hasAltitude ? altitude : [],
       distance,
-      time: hasCadence || hasWatts || distance.length > 0 ? time : [],
+      time: hasAnySeries || distance.length > 0 ? time : [],
     },
-    laps: (messages.lapMesgs ?? []).map(toFitLap),
+    laps,
   };
 }
 

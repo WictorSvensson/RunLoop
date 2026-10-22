@@ -11,14 +11,20 @@ import { ConnectionsSection } from "./ConnectionsSection";
 export const dynamic = "force-dynamic";
 
 // User profile: personal info plus every wearable connection control.
-// Garmin connects/syncs here; Suunto history arrives via export-zip upload
-// (<SuuntoUpload /> → /api/suunto/upload), idempotent on the filename stem
-// so re-uploads only add new workouts.
-export default async function ProfilePage() {
+// Garmin connects/syncs here; Suunto auto-syncs via Cloud API OAuth
+// (<SuuntoSync /> → /api/suunto/connect + /api/jobs/suunto-import) while the
+// manual export-zip upload (<SuuntoUpload /> → /api/suunto/upload) stays as
+// a fallback, idempotent on the filename stem so re-uploads only add new
+// workouts.
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const sessionUser = await getCurrentUser();
   if (!sessionUser) redirect("/login");
 
-  const [user, garminConnection, integrationStates] = await Promise.all([
+  const [user, garminConnection, suuntoConnection, integrationStates] = await Promise.all([
     prisma.user.findUnique({
       where: { id: sessionUser.id },
       select: {
@@ -33,6 +39,10 @@ export default async function ProfilePage() {
       where: { userId: sessionUser.id },
       select: { username: true, lastSyncedAt: true },
     }),
+    prisma.suuntoConnection.findUnique({
+      where: { userId: sessionUser.id },
+      select: { username: true, suuntoUserId: true, lastSyncedAt: true },
+    }),
     getIntegrationStates(sessionUser.id),
   ]);
   if (!user) redirect("/login");
@@ -42,6 +52,28 @@ export default async function ProfilePage() {
   const garminStatusText = garminConnection
     ? `Connected${garminConnection.username ? ` as ${garminConnection.username}` : ""}${garminConnection.lastSyncedAt ? ` · last synced ${garminConnection.lastSyncedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}` : ""}`
     : "Not connected";
+
+  const isSuuntoConnected = suuntoConnection !== null;
+  const suuntoIdentity = suuntoConnection?.username ?? suuntoConnection?.suuntoUserId;
+  const suuntoStatusText = suuntoConnection
+    ? `Auto-sync connected${suuntoIdentity ? ` as ${suuntoIdentity}` : ""}${suuntoConnection.lastSyncedAt ? ` · last synced ${suuntoConnection.lastSyncedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}` : ""} · or upload your history export (.zip from the Suunto app).`
+    : "Not connected · upload your history export (.zip from the Suunto app).";
+
+  // OAuth callback feedback (/api/suunto/callback redirects here with a
+  // generic reason code — never tokens or endpoint detail in the URL).
+  const resolvedParams = searchParams ? await searchParams : undefined;
+  const suuntoParam = resolvedParams?.suunto;
+  const suuntoFlag = Array.isArray(suuntoParam) ? suuntoParam[0] : suuntoParam;
+  const suuntoNotice =
+    suuntoFlag === "connected"
+      ? "Suunto connected. Click “Sync Suunto now” to import."
+      : suuntoFlag === "denied"
+        ? "Suunto authorization was denied — no tokens stored."
+        : suuntoFlag === "expired"
+          ? "Suunto connect expired. Please try connecting again."
+          : suuntoFlag === "failed"
+            ? "Suunto connect failed. Please try again."
+            : null;
 
   return (
     <div className="route-wrap">
@@ -75,6 +107,9 @@ export default async function ProfilePage() {
           isGarminConnected={isGarminConnected}
           garminStatusText={garminStatusText}
           defaultUsername={garminConfig.username}
+          isSuuntoConnected={isSuuntoConnected}
+          suuntoStatusText={suuntoStatusText}
+          suuntoNotice={suuntoNotice}
         />
       </section>
     </div>
